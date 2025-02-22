@@ -4,6 +4,8 @@ import os
 import sys
 import logging
 import argparse
+import psutil
+import gc
 from constant import STATES_AND_TERRITORIES
 
 def setup_logging(log_file, base_dir, log_level, log_parts):
@@ -86,6 +88,13 @@ def expand_state_ranges(states):
             expanded_states.append(state)
     
     return expanded_states
+
+def monitor_memory(threshold=80):
+    """Monitor memory usage and log a warning if it exceeds the threshold."""
+    memory_usage = psutil.virtual_memory().percent
+    if memory_usage > threshold:
+        logging.warning(f"Memory usage is high: {memory_usage}%")
+        gc.collect()  # Force garbage collection
 
 def download_files():
     logging.info("Downloading files.")

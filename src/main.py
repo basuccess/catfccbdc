@@ -53,12 +53,13 @@ def main():
         logging.debug(f"State output directory: {state_output_dir}")
 
         logging.info(f"Processing BDC files for state: {state_abbr}")
-        bdc_df = read_bdc_files_for_state(state_input_bdc_dir)
-        logging.debug(f"BDC DataFrame head for state {state_abbr}:\n{bdc_df.head()}")
+        bdc_summary = read_bdc_files_for_state(base_dir, state_input_bdc_dir)
+        # Log a sample of the summary dictionary instead of treating it as a DataFrame
+        logging.debug(f"BDC summary sample for state {state_abbr}:\n{json.dumps(list(bdc_summary.items())[:5], indent=2)}")
 
-        service_stats = calculate_service_statistics(bdc_df)
+        service_stats = calculate_service_statistics(bdc_summary)
         logging.debug(f"Service statistics sample for state {state_abbr}:\n{json.dumps(service_stats, indent=2)[:1000]}")
-
+        
         # Save the service statistics to a JSON file
         output_file = os.path.join(state_output_dir, f"{state_abbr}_service_statistics.json")
         with open(output_file, 'w') as f:
