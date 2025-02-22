@@ -1,0 +1,78 @@
+0026946046,350085,i3 Broadband,1065425560,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425560,40,60,10,1,R,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425570,40,60,10,1,R,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425607,40,2000,100,1,X,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425570,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425607,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425587,40,2000,100,1,B,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425587,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425605,40,1000,50,1,R,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425605,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425617,40,2000,100,1,R,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425617,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425636,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425636,40,60,10,1,R,RI,440010302002017,882a33149dfffff
+0026946046,350085,i3 Broadband,1065425598,40,2000,40,1,X,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425598,40,60,10,1,R,RI,440010302002017,882a33149dfffff
+0001834696,130360,Cox Communications,1065425573,40,60,10,,1,R,RI,440010302002017,882a33149dfffff
+
+{
+    "type": "Feature",
+    "id": "440010302002017",
+    "properties": {
+        "block_geoid": "440010302002017",
+        "Cable": {
+            "Cox Communications": {
+                "Holding_Company": "130360",
+                "R": [
+                    {
+                        "max_Adv_DL_speed": "2000",
+                        "max_Adv_UL_speed": "100",
+                        "low_latency": "1",
+                        "Served_Location": "1065425607"
+                    },
+                    {
+                        "max_Adv_DL_speed": "1000",
+                        "max_Adv_UL_speed": "50",
+                        "low_latency": "1",
+                        "Served_Location": "1065425605"
+                    },
+                    {
+                        "max_Adv_DL_speed": "60",
+                        "max_Adv_UL_speed": "10",
+                        "low_latency": "1",
+                        "Served_Location": "1065425560,1065425570,1065425636,1065425598,1065425573"
+                    }
+                ],
+                "B": [
+                    {
+                        "max_Adv_DL_speed": "2000",
+                        "max_Adv_UL_speed": "100",
+                        "low_latency": "1",
+                        "Served_Location": "1065425587"
+                    }
+                ],
+                "X": [
+                    {
+                        "max_Adv_DL_speed": "2000",
+                        "max_Adv_UL_speed": "100",
+                        "low_latency": "1",
+                        "Served_Location": "1065425607"
+                    }
+                ]
+            },
+            "i3 Broadband": {
+                "Holding_Company": "350085",
+                "X": [
+                    {
+                        "max_Adv_DL_speed": "2000",
+                        "max_Adv_UL_speed": "40",
+                        "low_latency": "1",
+                        "Served_Location": "1065425560,1065425570,1065425607,1065425605,1065425617,1065425636,1065425598"
+                    }
+                ]
+            }
+        }
+    },
+    "geometry": null
+}

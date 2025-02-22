@@ -1,0 +1,165 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+      {
+          "type": "Feature",
+          "id": "440070104002010",
+          "properties": {
+              "block_geoid": "440070104002010",
+              "Copper": {
+                  "Andrena": {
+                      "Holding_Company": "Andrena, Inc.",
+                      "R": [],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "1000",
+                              "max_Adv_UL_speed": "1000",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012,1347118011,1347118013,1347118014"
+                          }
+                      ]
+                  }
+              },
+              "NGeoSt": {
+                  "Starlink": {
+                      "Holding_Company": "Space Exploration Technologies Corp.",
+                      "R": [],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "220",
+                              "max_Adv_UL_speed": "25",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012,1347118011,1347118013,1347118014"
+                          }
+                      ]
+                  }
+              },
+              "Fiber": {
+                  "Cox Communications": {
+                      "Holding_Company": "Cox Communications, Inc.",
+                      "R": [],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "2000",
+                              "max_Adv_UL_speed": "2000",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012"
+                          }
+                      ]
+                  },
+                  "Verizon": {
+                      "Holding_Company": "Verizon Communications Inc.",
+                      "R": [],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "940",
+                              "max_Adv_UL_speed": "880",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012,1347118011,1347118013,1347118014"
+                          }
+                      ]
+                  }
+              },
+              "GeoSat": {
+                  "HughesNet": {
+                      "Holding_Company": "Hughes Network Systems, LLC",
+                      "R": [],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "100",
+                              "max_Adv_UL_speed": "5",
+                              "low_latency": "0",
+                              "Served_Location": "1347118012,1347118011,1347118013,1347118014"
+                          }
+                      ]
+                  },
+                  "Viasat Inc": {
+                      "Holding_Company": "Viasat, Inc.",
+                      "R": [
+                          {
+                              "max_Adv_DL_speed": "100",
+                              "max_Adv_UL_speed": "3",
+                              "low_latency": "0",
+                              "Served_Location": "1347118012,1347118011,1347118013,1347118014"
+                          }
+                      ],
+                      "B": [
+                          {
+                              "max_Adv_DL_speed": "50",
+                              "max_Adv_UL_speed": "4",
+                              "low_latency": "0",
+                              "Served_Location": "1347118012,1347118011,1347118013,1347118014"
+                          }
+                      ],
+                      "X": []
+                  }
+              },
+              "LicFWA": {
+                  "Verizon": {
+                      "Holding_Company": "Verizon Communications Inc.",
+                      "R": [],
+                      "B": [
+                          {
+                              "max_Adv_DL_speed": "10",
+                              "max_Adv_UL_speed": "1",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012"
+                          }
+                      ],
+                      "X": []
+                  },
+                  "T-Mobile": {
+                      "Holding_Company": "T-Mobile USA, Inc.",
+                      "R": [],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "100",
+                              "max_Adv_UL_speed": "20",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012,1347118013,1347118014"
+                          }
+                      ]
+                  }
+              },
+              "Cable": {
+                  "Cox Communications": {
+                      "Holding_Company": "Cox Communications, Inc.",
+                      "R": [
+                          {
+                              "max_Adv_DL_speed": "2000",
+                              "max_Adv_UL_speed": "100",
+                              "low_latency": "1",
+                              "Served_Location": "1347118011"
+                          },
+                          {
+                              "max_Adv_DL_speed": "2000",
+                              "max_Adv_UL_speed": "35",
+                              "low_latency": "1",
+                              "Served_Location": "1347118013,1347118014"
+                          }
+                      ],
+                      "B": [],
+                      "X": [
+                          {
+                              "max_Adv_DL_speed": "2000",
+                              "max_Adv_UL_speed": "35",
+                              "low_latency": "1",
+                              "Served_Location": "1347118012"
+                          }
+                      ]
+                  }
+              }
+          },
+          "geometry": null
+      }
+  ],
+  [..]
+}
+
+

@@ -1,0 +1,41 @@
+{
+  "type": "Feature",
+  "id": "440070104002010",
+  "properties": {
+    "Copper": {},
+    "Cable": {},
+    "Fiber": {},
+    "GeoSat": {},
+    "NGeoSt": {},
+    "UnlFWA": {},
+    "LicFWA": {},
+    "LBRFWA": {},
+    "Other": {},
+    "service_statistics": {
+      "Total BSLs": 0,
+      "Total Residential BLSs": 0,
+      "R": {
+        "2": "",
+        "1": "",
+        "0": "",
+        "Served": 0,
+        "Underserved": 0
+      },
+      "B": {
+        "2": "",
+        "1": "",
+        "0": "",
+        "Served": 0,
+        "Underserved": 0
+      },
+      "X": {
+        "2": "",
+        "1": "",
+        "0": "",
+        "Served": 0,
+        "Underserved": 0
+      }
+    }
+  },
+  "geometry": null
+}
