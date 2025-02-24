@@ -1,7 +1,8 @@
 {
   "type": "Feature",
-  "id": "440070104002010",
+  "id": "",
   "properties": {
+    "block_geoid": "",
     "Copper": {},
     "Cable": {},
     "Fiber": {},
@@ -11,9 +12,10 @@
     "LicFWA": {},
     "LBRFWA": {},
     "Other": {},
-    "service_statistics": {
-      "Total BSLs": 0,
-      "Total Residential BLSs": 0,
+    "TotalServed": 0,
+    "TotalUnderserved": 0,
+    "TotalUnserved": 0,
+    "stats": {
       "R": {
         "2": "",
         "1": "",

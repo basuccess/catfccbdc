@@ -39,7 +39,6 @@ def load_holder_mapping(base_dir):
     holder_mapping_df['provider_id'] = holder_mapping_df['provider_id'].astype(str)
 
     holder_mapping = dict(zip(holder_mapping_df['provider_id'], holder_mapping_df['holding_company']))
-    logging.debug(f"Holder mapping: {holder_mapping}")
     return holder_mapping
 
 def check_required_directories(base_dir, state_abbr=None):

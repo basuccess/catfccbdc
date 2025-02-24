@@ -1,0 +1,3 @@
+2025-02-23 15:06:34,601 - INFO - functions.py:36 - No specific log parts provided, using default or set logging level for all modules.
+2025-02-23 15:06:34,601 - INFO - main.py:29 - Logging is set up.
+2025-02-23 15:06:34,601 - INFO - prep.py:45 - Checking required directories.

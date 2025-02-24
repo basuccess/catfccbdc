@@ -47,7 +47,7 @@ def parse_arguments():
     parser.add_argument('-s', '--state', type=str, nargs='*', default=[state[1] for state in STATES_AND_TERRITORIES], help='State abbreviation(s) to process')
     parser.add_argument('--log-file', type=str, nargs='?', const='catfccbdc_log.log', help='Log file path')
     parser.add_argument('--log-level', type=str, default='INFO', help='Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)')
-    parser.add_argument('--log-parts', type=str, nargs='*', default=[], help='Modules to apply DEBUG logging level to (e.g., main, prep, function, bdcfunction, merge)')
+    parser.add_argument('--log-parts', type=str, nargs='*', default=[], help='Modules to apply DEBUG logging level to (e.g., main, prep, functions, bdcfunction, tabblockmerge)')
     parser.add_argument('-o', '--output-dir', type=str, help='Output directory for data files')
     parser.add_argument('-u', '--usage', action='store_true', help='Print usage information and exit')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 2.0', help='Print version and exit')
