@@ -97,6 +97,7 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
     summary = {}
     all_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values()]
     
+    logging.debug(f"Processing chunk with {len(df_chunk)} rows")
     for _, row in df_chunk.iterrows():
         block_geoid = row['block_geoid']
         brand_name = row['brand_name']
@@ -113,7 +114,6 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
             summary[block_geoid] = create_empty_feature(block_geoid)
         
         if tech_abbr in all_tech_abbrs:
-            # Check if tech entry is None before assigning
             if summary[block_geoid]["properties"][tech_abbr] is None:
                 summary[block_geoid]["properties"][tech_abbr] = {}
                 
@@ -147,6 +147,7 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
                     "Served_Location": served_location
                 })
     
+    logging.debug(f"Chunk output for {temp_file}: {json.dumps(summary, indent=2, default=decimal_to_json_serializable)}")
     with open(temp_file, 'w') as f:
         json.dump(summary, f, default=decimal_to_json_serializable)
     return temp_file
@@ -170,51 +171,56 @@ def merge_chunk_summaries(chunk_files):
     for chunk_file in chunk_files:
         with open(chunk_file, 'r') as f:
             summary = json.load(f)
+            logging.debug(f"Loaded chunk {chunk_file}: {json.dumps(next(iter(summary.values())), indent=2)}")
             for block_geoid, data in summary.items():
                 if block_geoid not in combined_summary:
                     combined_summary[block_geoid] = data
                 else:
-                    for tech_abbr in all_tech_abbrs:
-                        if tech_abbr in data["properties"]:
-                            # Handle None case from source
-                            if data["properties"][tech_abbr] is None:
-                                if tech_abbr not in combined_summary[block_geoid]["properties"] or combined_summary[block_geoid]["properties"][tech_abbr] is None:
-                                    combined_summary[block_geoid]["properties"][tech_abbr] = None
-                            elif isinstance(data["properties"][tech_abbr], dict):
-                                if tech_abbr not in combined_summary[block_geoid]["properties"] or combined_summary[block_geoid]["properties"][tech_abbr] is None:
-                                    combined_summary[block_geoid]["properties"][tech_abbr] = {}
-                                for brand_name, provider_data in data["properties"][tech_abbr].items():
-                                    if brand_name not in combined_summary[block_geoid]["properties"][tech_abbr]:
-                                        combined_summary[block_geoid]["properties"][tech_abbr][brand_name] = provider_data
+                    for key, value in data["properties"].items():
+                        if key in all_tech_abbrs:
+                            if value is None:
+                                # Keep None if no data in this chunk
+                                continue
+                            elif isinstance(value, dict) and value:
+                                # Only merge if non-empty dict
+                                if combined_summary[block_geoid]["properties"][key] is None:
+                                    combined_summary[block_geoid]["properties"][key] = {}
+                                for brand_name, provider_data in value.items():
+                                    if brand_name not in combined_summary[block_geoid]["properties"][key]:
+                                        combined_summary[block_geoid]["properties"][key][brand_name] = provider_data
                                     else:
                                         for br_code in ["R", "B", "X"]:
-                                            existing_records = combined_summary[block_geoid]["properties"][tech_abbr][brand_name][br_code]
+                                            existing_records = combined_summary[block_geoid]["properties"][key][brand_name][br_code]
                                             new_records = provider_data[br_code]
                                             speed_groups = {}
                                             for record in new_records:
-                                                key = (record["max_Adv_DL_speed"], 
-                                                       record["max_Adv_UL_speed"], 
-                                                       record["low_latency"])
-                                                if key not in speed_groups:
-                                                    speed_groups[key] = set()
-                                                speed_groups[key].update(record["Served_Location"].split(","))
-                                            
-                                            for key, locations in speed_groups.items():
-                                                dl_speed, ul_speed, latency = key
-                                                matching_record = next(
-                                                    (r for r in existing_records if r["max_Adv_DL_speed"] == dl_speed and 
-                                                     r["max_Adv_UL_speed"] == ul_speed and r["low_latency"] == latency), None)
-                                                if matching_record:
-                                                    existing_locations = set(matching_record["Served_Location"].split(","))
-                                                    existing_locations.update(locations)
-                                                    matching_record["Served_Location"] = ",".join(sorted(existing_locations))
-                                                else:
-                                                    existing_records.append({
-                                                        "max_Adv_DL_speed": dl_speed,
-                                                        "max_Adv_UL_speed": ul_speed,
-                                                        "low_latency": latency,
-                                                        "Served_Location": ",".join(sorted(locations))
-                                                    })
+                                                key_tuple = (record["max_Adv_DL_speed"], 
+                                                             record["max_Adv_UL_speed"], 
+                                                             record["low_latency"])
+                                                if key_tuple not in speed_groups:
+                                                    speed_groups[key_tuple] = set()
+                                                speed_groups[key_tuple].update(record["Served_Location"].split(","))
+                                                
+                                                for key_tuple, locations in speed_groups.items():
+                                                    dl_speed, ul_speed, latency = key_tuple
+                                                    matching_record = next(
+                                                        (r for r in existing_records if r["max_Adv_DL_speed"] == dl_speed and 
+                                                         r["max_Adv_UL_speed"] == ul_speed and r["low_latency"] == latency), None)
+                                                    if matching_record:
+                                                        existing_locations = set(matching_record["Served_Location"].split(","))
+                                                        existing_locations.update(locations)
+                                                        matching_record["Served_Location"] = ",".join(sorted(existing_locations))
+                                                    else:
+                                                        existing_records.append({
+                                                            "max_Adv_DL_speed": dl_speed,
+                                                            "max_Adv_UL_speed": ul_speed,
+                                                            "low_latency": latency,
+                                                            "Served_Location": ",".join(sorted(locations))
+                                                        })
+                        elif key not in all_tech_abbrs:
+                            combined_summary[block_geoid]["properties"][key] = value
+    
+    logging.debug(f"Merged summary sample: {json.dumps(next(iter(combined_summary.values())), indent=2, default=decimal_to_json_serializable)}")
     return {"type": "FeatureCollection", "features": list(combined_summary.values())}
 
 def process_bdc_files(base_dir, state_dir):

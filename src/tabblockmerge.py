@@ -91,20 +91,20 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                 first = False
                 
             feature["id"] = geoid20
-            # Ensure "NAME20" and others are excluded
             if "NAME20" in feature["properties"]:
                 del feature["properties"]["NAME20"]
 
+            # Preserve None instead of defaulting to {}
             feature['properties'].update({
-                "Copper": bdc_props.get("Copper", {}),
-                "Cable": bdc_props.get("Cable", {}),
-                "Fiber": bdc_props.get("Fiber", {}),
-                "GeoSat": bdc_props.get("GeoSat", {}),
-                "NGeoSt": bdc_props.get("NGeoSt", {}),
-                "UnlFWA": bdc_props.get("UnlFWA", {}),
-                "LicFWA": bdc_props.get("LicFWA", {}),
-                "LBRFWA": bdc_props.get("LBRFWA", {}),
-                "Other": bdc_props.get("Other", {}),
+                "Copper": bdc_props.get("Copper"),
+                "Cable": bdc_props.get("Cable"),
+                "Fiber": bdc_props.get("Fiber"),
+                "GeoSat": bdc_props.get("GeoSat"),
+                "NGeoSt": bdc_props.get("NGeoSt"),
+                "UnlFWA": bdc_props.get("UnlFWA"),
+                "LicFWA": bdc_props.get("LicFWA"),
+                "LBRFWA": bdc_props.get("LBRFWA"),
+                "Other": bdc_props.get("Other"),
                 "stats": bdc_props.get("stats", {
                     "Total BSLs": feature['properties']['HOUSING20'],
                     "Total Residential BLSs": 0,
@@ -124,8 +124,8 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
             json.dump(feature, f)
         
         f.write(']}')
-        f.flush()  # Ensure all data is written to the file
-        os.fsync(f.fileno())  # Ensure the file is fully written to disk
+        f.flush()
+        os.fsync(f.fileno())
     logging.info(f"Streamed merged GeoJSON to: {output_file}")
 
 def save_to_gpkg(geojson_file, gpkg_file):
