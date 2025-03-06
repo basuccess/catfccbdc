@@ -110,46 +110,47 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
         low_latency = str(int(row['low_latency']))
         served_location = row['location_id']
         
+        logging.debug(f"Processing row: block_geoid={block_geoid}, tech_abbr={tech_abbr}, brand_name={brand_name}, location_id={served_location}")
+        
         if block_geoid not in summary:
             summary[block_geoid] = create_empty_feature(block_geoid)
         
         if tech_abbr in all_tech_abbrs:
             if summary[block_geoid]["properties"][tech_abbr] is None:
                 summary[block_geoid]["properties"][tech_abbr] = {}
-                
             if brand_name not in summary[block_geoid]["properties"][tech_abbr]:
                 summary[block_geoid]["properties"][tech_abbr][brand_name] = {
+                    "provider_id": provider_id,
                     "Holding_Company": holding_company,
                     "R": [],
                     "B": [],
                     "X": []
                 }
-            
             provider_data = summary[block_geoid]["properties"][tech_abbr][brand_name][business_residential_code]
             existing_record = None
-            
             for record in provider_data:
                 if (record["max_Adv_DL_speed"] == max_adv_dl_speed and 
                     record["max_Adv_UL_speed"] == max_adv_ul_speed and 
                     record["low_latency"] == low_latency):
                     existing_record = record
                     break
-            
             if existing_record:
-                locations = set(existing_record["Served_Location"].split(","))
+                locations = set(existing_record["Locations"].split(","))
                 locations.add(served_location)
-                existing_record["Served_Location"] = ",".join(sorted(locations))
+                existing_record["Locations"] = ",".join(sorted(locations))
+                existing_record["Location_Count"] = len(locations)
             else:
                 provider_data.append({
                     "max_Adv_DL_speed": max_adv_dl_speed,
                     "max_Adv_UL_speed": max_adv_ul_speed,
                     "low_latency": low_latency,
-                    "Served_Location": served_location
+                    "Locations": served_location,
+                    "Location_Count": 1
                 })
     
-    logging.debug(f"Chunk output for {temp_file}: {json.dumps(summary, indent=2, default=decimal_to_json_serializable)}")
     with open(temp_file, 'w') as f:
         json.dump(summary, f, default=decimal_to_json_serializable)
+    logging.debug(f"Chunk summary for {block_geoid}: {summary.get(block_geoid)}")
     return temp_file
 
 def process_bdc_file(file_path, holder_mapping, temp_dir):
@@ -171,57 +172,111 @@ def merge_chunk_summaries(chunk_files):
     for chunk_file in chunk_files:
         with open(chunk_file, 'r') as f:
             summary = json.load(f)
-            logging.debug(f"Loaded chunk {chunk_file}: {json.dumps(next(iter(summary.values())), indent=2)}")
             for block_geoid, data in summary.items():
                 if block_geoid not in combined_summary:
                     combined_summary[block_geoid] = data
                 else:
                     for key, value in data["properties"].items():
-                        if key in all_tech_abbrs:
-                            if value is None:
-                                # Keep None if no data in this chunk
-                                continue
-                            elif isinstance(value, dict) and value:
-                                # Only merge if non-empty dict
-                                if combined_summary[block_geoid]["properties"][key] is None:
-                                    combined_summary[block_geoid]["properties"][key] = {}
-                                for brand_name, provider_data in value.items():
-                                    if brand_name not in combined_summary[block_geoid]["properties"][key]:
-                                        combined_summary[block_geoid]["properties"][key][brand_name] = provider_data
-                                    else:
-                                        for br_code in ["R", "B", "X"]:
-                                            existing_records = combined_summary[block_geoid]["properties"][key][brand_name][br_code]
-                                            new_records = provider_data[br_code]
-                                            speed_groups = {}
-                                            for record in new_records:
-                                                key_tuple = (record["max_Adv_DL_speed"], 
-                                                             record["max_Adv_UL_speed"], 
-                                                             record["low_latency"])
-                                                if key_tuple not in speed_groups:
-                                                    speed_groups[key_tuple] = set()
-                                                speed_groups[key_tuple].update(record["Served_Location"].split(","))
-                                                
-                                                for key_tuple, locations in speed_groups.items():
-                                                    dl_speed, ul_speed, latency = key_tuple
-                                                    matching_record = next(
-                                                        (r for r in existing_records if r["max_Adv_DL_speed"] == dl_speed and 
-                                                         r["max_Adv_UL_speed"] == ul_speed and r["low_latency"] == latency), None)
-                                                    if matching_record:
-                                                        existing_locations = set(matching_record["Served_Location"].split(","))
-                                                        existing_locations.update(locations)
-                                                        matching_record["Served_Location"] = ",".join(sorted(existing_locations))
-                                                    else:
-                                                        existing_records.append({
-                                                            "max_Adv_DL_speed": dl_speed,
-                                                            "max_Adv_UL_speed": ul_speed,
-                                                            "low_latency": latency,
-                                                            "Served_Location": ",".join(sorted(locations))
-                                                        })
+                        if key in all_tech_abbrs and value is not None and isinstance(value, dict) and value:
+                            if combined_summary[block_geoid]["properties"][key] is None:
+                                combined_summary[block_geoid]["properties"][key] = {}
+                            for brand_name, provider_data in value.items():
+                                # Initialize or update brand data
+                                if brand_name not in combined_summary[block_geoid]["properties"][key]:
+                                    combined_summary[block_geoid]["properties"][key][brand_name] = {
+                                        "provider_id": provider_data["provider_id"],
+                                        "Holding_Company": provider_data["Holding_Company"],
+                                        "Location_Count": 0,  # Initialize early
+                                        "R": [],
+                                        "B": [],
+                                        "X": []
+                                    }
+                                existing_brand = combined_summary[block_geoid]["properties"][key][brand_name]
+                                # Merge records for each category
+                                for br_code in ["R", "B", "X"]:
+                                    existing_records = existing_brand[br_code]
+                                    new_records = provider_data.get(br_code, [])
+                                    speed_groups = {}
+                                    for record in new_records:
+                                        key_tuple = (
+                                            record["max_Adv_DL_speed"],
+                                            record["max_Adv_UL_speed"],
+                                            record["low_latency"]
+                                        )
+                                        if key_tuple not in speed_groups:
+                                            speed_groups[key_tuple] = set()
+                                        speed_groups[key_tuple].update(record["Locations"].split(","))
+                                    
+                                    for key_tuple, locations in speed_groups.items():
+                                        dl_speed, ul_speed, latency = key_tuple
+                                        matching_record = next(
+                                            (r for r in existing_records if 
+                                             r["max_Adv_DL_speed"] == dl_speed and 
+                                             r["max_Adv_UL_speed"] == ul_speed and 
+                                             r["low_latency"] == latency), None)
+                                        if matching_record:
+                                            existing_locations = set(matching_record["Locations"].split(","))
+                                            existing_locations.update(locations)
+                                            matching_record["Locations"] = ",".join(sorted(existing_locations))
+                                            matching_record["Location_Count"] = len(existing_locations)
+                                        else:
+                                            existing_records.append({
+                                                "max_Adv_DL_speed": dl_speed,
+                                                "max_Adv_UL_speed": ul_speed,
+                                                "low_latency": latency,
+                                                "Locations": ",".join(sorted(locations)),
+                                                "Location_Count": len(locations)
+                                            })
+                                # Compute and set brand-level Location_Count
+                                all_locations = set()
+                                for br_code in ["R", "B", "X"]:
+                                    for record in existing_brand[br_code]:
+                                        all_locations.update(record["Locations"].split(","))
+                                # Update with explicit key order
+                                existing_brand.update({
+                                    "provider_id": existing_brand["provider_id"],
+                                    "Holding_Company": existing_brand["Holding_Company"],
+                                    "Location_Count": len(all_locations),
+                                    "R": existing_brand["R"],
+                                    "B": existing_brand["B"],
+                                    "X": existing_brand["X"]
+                                })
+                                if block_geoid == "440070104002010":
+                                    logging.debug(f"merge_chunk_summaries: Set Location_Count for {block_geoid}.{key}.{brand_name}: {len(all_locations)} - Locations: {sorted(all_locations)}")
                         elif key not in all_tech_abbrs:
                             combined_summary[block_geoid]["properties"][key] = value
     
-    logging.debug(f"Merged summary sample: {json.dumps(next(iter(combined_summary.values())), indent=2, default=decimal_to_json_serializable)}")
-    return {"type": "FeatureCollection", "features": list(combined_summary.values())}
+    # Final pass to ensure Location_Count is set for all brands
+    for block_geoid, data in combined_summary.items():
+        for tech in all_tech_abbrs:
+            tech_data = data["properties"].get(tech)
+            if tech_data and isinstance(tech_data, dict):
+                for brand_name, brand_data in tech_data.items():
+                    if "Location_Count" not in brand_data or not isinstance(brand_data["Location_Count"], int):
+                        all_locations = set()
+                        for br_code in ["R", "B", "X"]:
+                            for record in brand_data.get(br_code, []):
+                                all_locations.update(record["Locations"].split(","))
+                        # Reorder keys in final pass
+                        ordered_brand_data = {
+                            "provider_id": brand_data["provider_id"],
+                            "Holding_Company": brand_data["Holding_Company"],
+                            "Location_Count": len(all_locations),
+                            "R": brand_data["R"],
+                            "B": brand_data["B"],
+                            "X": brand_data["X"]
+                        }
+                        data["properties"][tech][brand_name] = ordered_brand_data
+                        if block_geoid == "440070104002010":
+                            logging.debug(f"merge_chunk_summaries: Final pass set Location_Count for {block_geoid}.{tech}.{brand_name}: {len(all_locations)} - Locations: {sorted(all_locations)}")
+    
+    if "440070104002010" in combined_summary:
+        logging.debug(f"merge_chunk_summaries: Merged summary for 440070104002010: {json.dumps(combined_summary['440070104002010'], indent=2)}")
+    else:
+        logging.debug("merge_chunk_summaries: Block 440070104002010 not found in combined_summary")
+    
+    logging.debug(f"merge_chunk_summaries: Merged summary sample: {json.dumps(next(iter(combined_summary.values())), indent=2)}")
+    return {"type": "FeatureCollection", "features": [{"id": k, "properties": v["properties"]} for k, v in combined_summary.items()]}
 
 def process_bdc_files(base_dir, state_dir):
     logging.info(f"Reading BDC files for state directory: {state_dir}")
@@ -255,22 +310,21 @@ def calculate_service_statistics(feature_collection):
     monitor_memory()
     
     features = feature_collection["features"]
-    bdcstat_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values() if v[1]]
+    valid_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values() if v[1]]  # Only True-flagged techs
     
     for feature in features:
         block_geoid = feature["id"]
         properties = feature["properties"]
         
-        # Track highest score and category per location_id
         location_scores = {}
         
-        for tech_abbr in bdcstat_tech_abbrs:
+        for tech_abbr in valid_tech_abbrs:
             if tech_abbr in properties and properties[tech_abbr] is not None:
                 providers = properties[tech_abbr]
                 for brand_name, provider_data in providers.items():
                     for br_code in ["R", "B", "X"]:
                         for record in provider_data[br_code]:
-                            served_locations = record["Served_Location"].split(",")
+                            served_locations = record["Locations"].split(",")  # Fixed from "Served_Location"
                             for location_id in served_locations:
                                 score = 0
                                 if (int(record["max_Adv_DL_speed"]) >= SERVED_DL_SPEED and 

@@ -113,6 +113,7 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
                 
             if brand_name not in summary[block_geoid]["properties"][tech_abbr]:
                 summary[block_geoid]["properties"][tech_abbr][brand_name] = {
+                    "provider_id": provider_id,
                     "Holding_Company": holding_company,
                     "R": [],
                     "B": [],

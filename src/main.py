@@ -7,24 +7,20 @@ import os
 import sys
 import gc
 import tempfile
-
-from constant import TECH_ABBR_MAPPING, BDC_US_PROVIDER_FILE_PATTERN, \
-    BDC_TECH_CODES_FILE_PATTERN, BDC_FILE_PATTERN, TABBLOCK20_FILE_PATTERN
+from constant import TECH_ABBR_MAPPING
 from functions import setup_logging, parse_arguments, expand_state_ranges
 from prep import check_required_directories, get_state_info
 from bdcprocessing import process_bdc_files, calculate_service_statistics
-from tabblockmerge import process_tabblock_data, stream_merge_bdc_stats, save_to_gpkg
+from tabblockmerge import process_tabblock_data, stream_merge_bdc_stats
 
 def decimal_to_json_serializable(obj):
-    """Convert Decimal to int or float for JSON serialization."""
     if isinstance(obj, Decimal):
-        return float(obj)  # Default to float; int used in specific fields upstream
+        return float(obj)
     return obj
 
 def main():
     args = parse_arguments()
     logging.debug(f"Parsed arguments: {args}")
-    
     setup_logging(args.log_file, args.base_dir, args.log_level, args.log_parts)
     logging.info("Logging is set up.")
 
@@ -44,7 +40,7 @@ def main():
     with tempfile.TemporaryDirectory() as temp_dir:
         for state_abbr in states_to_process:
             state_input_bdc_dir, state_input_tabblock_dir = check_required_directories(base_dir, state_abbr)
-            # Default to state_input_bdc_dir unless args.output_dir is valid
+            # Use state_input_bdc_dir as default, override with args.output_dir if provided and valid
             state_output_dir = state_input_bdc_dir
             if args.output_dir and os.path.isdir(os.path.dirname(args.output_dir)):
                 state_output_dir = os.path.join(args.output_dir, f"{get_state_info(state_abbr)[0]}_{state_abbr}_{get_state_info(state_abbr)[2]}")
@@ -53,6 +49,8 @@ def main():
             logging.info(f"Processing BDC files for state: {state_abbr}")
             bdc_feature_collection = process_bdc_files(base_dir, state_input_bdc_dir)
             logging.debug(f"BDC feature collection sample for state {state_abbr}:\n{json.dumps(bdc_feature_collection['features'][:1], indent=2, default=decimal_to_json_serializable)}")
+            if not bdc_feature_collection['features']:
+                logging.warning(f"No BDC features processed for state {state_abbr}")
 
             try:
                 service_stats = calculate_service_statistics(bdc_feature_collection)
@@ -65,23 +63,57 @@ def main():
             del bdc_feature_collection
             gc.collect()
 
+            # Process Tabblock20 and merge to temporary GeoJSON (EPSG:4269)
             logging.info(f"Processing Tabblock20 data for state: {state_abbr}")
             tabblock_json_file = process_tabblock_data(base_dir, state_abbr, temp_dir)
-
-            # Merge BDC stats into Tabblock20
             fips, abbr, name = get_state_info(state_abbr)
-            geojson_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.geojson")
-            stream_merge_bdc_stats(tabblock_json_file, {f['id']: f['properties'] for f in service_stats['features']}, geojson_output_file)
-            logging.info(f"Merged GeoJSON saved to: {geojson_output_file}")
+            geojson_4269_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB_4269.geojson")
+            stream_merge_bdc_stats(tabblock_json_file, {f['id']: f['properties'] for f in service_stats['features']}, geojson_4269_file)
+            logging.info(f"Temporary GeoJSON (EPSG:4269) saved to: {geojson_4269_file}")
+            
+            # Delete service_stats here—done with BDC data
+            del service_stats
+            gc.collect()
+            logging.debug(f"Memory cleared after merging BDC data for state: {state_abbr}")
 
-            # Convert to GeoPackage
-            gdf = gpd.read_file(geojson_output_file)
-            gdf.set_crs(epsg=4269, inplace=True)
-            gpkg_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.gpkg")
-            gdf.to_file(gpkg_output_file, driver="GPKG")
-            logging.info(f"Merged GeoPackage saved to: {gpkg_output_file}")
+            # Read, reproject, and write final outputs
+            try:
+                gdf = gpd.read_file(geojson_4269_file)
+                logging.debug(f"Loaded GeoJSON {geojson_4269_file} into GeoDataFrame")
+                # Check and set CRS
+                if gdf.crs is None or gdf.crs.to_epsg() != 4269:
+                    gdf.set_crs(epsg=4269, inplace=True, allow_override=True)
+                    logging.debug("Set CRS to EPSG:4269 with override")
+                else:
+                    logging.debug("CRS already set to EPSG:4269")
+                gdf_4326 = gdf.to_crs(epsg=4326)      # Reproject to WGS84
+                logging.debug(f"Reprojected GeoDataFrame to EPSG:4326 for state: {state_abbr}")
 
-            del service_stats, gdf
+                # Write final GeoJSON (EPSG:4326)
+                geojson_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.geojson")
+                gdf_4326.to_file(geojson_output_file, driver="GeoJSON")
+                logging.info(f"Final GeoJSON (EPSG:4326) saved to: {geojson_output_file}")
+                
+                # Delete gdf here—done with original 4269 data
+                del gdf
+                gc.collect()
+                logging.debug(f"Memory cleared after writing GeoJSON for state: {state_abbr}")
+
+                # Write final GPKG (EPSG:4326) with overwrite option
+                gpkg_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.gpkg")
+                gdf_4326.to_file(
+                    gpkg_output_file,
+                    driver="GPKG",
+                    layer=f"{fips.zfill(2)}_{abbr}_BB",
+                    layer_options={"OVERWRITE": "YES"}
+                )
+
+            except Exception as e:
+                logging.error(f"Failed to process GeoJSON/GPKG for {state_abbr}: {str(e)}")
+                raise
+
+            # Final cleanup
+            del gdf_4326
             gc.collect()
             logging.info(f"Memory cleared after processing state: {state_abbr}")
 

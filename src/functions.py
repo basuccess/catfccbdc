@@ -1,4 +1,5 @@
 # functions.py
+# Functions for building broadband service geopackage files for US states and territories.
 
 import os
 import sys
@@ -9,7 +10,7 @@ import gc
 from constant import STATES_AND_TERRITORIES
 
 def setup_logging(log_file, base_dir, log_level, log_parts):
-    log_format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    log_format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s'  # Added %(funcName)s
     parts_log_level = getattr(logging, log_level.upper(), logging.INFO)
 
     handlers = [logging.StreamHandler(sys.stdout)]
@@ -19,27 +20,28 @@ def setup_logging(log_file, base_dir, log_level, log_parts):
         try:
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-            handlers.append(logging.FileHandler(log_file_path, mode='w'))
+            file_handler = logging.FileHandler(log_file_path, mode='w')
+            file_handler.setLevel(parts_log_level)  # Set handler level explicitly
+            handlers.append(file_handler)
         except FileNotFoundError as e:
             logging.error(f"Failed to create log file directory: {e}")
             sys.exit(1)
 
-    # Remove any existing handlers to avoid duplicates
+    # Remove existing handlers
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
-    
 
-    # Check if log_parts is empty
+    # Configure root logger
+    logging.basicConfig(level=parts_log_level, format=log_format, handlers=handlers, force=True)
+
     if not log_parts:
-        # Execute alternative code if log_parts is empty
-        logging.basicConfig(level=parts_log_level, format=log_format, handlers=handlers, force=True)
         logging.info("No specific log parts provided, using default or set logging level for all modules.")
     else:
-        # Set specific log levels for specified modules
-        logging.basicConfig(level=logging.INFO, format=log_format, handlers=handlers, force=True)
-        for part in log_parts:
-            logger = logging.getLogger(part)
+        # Apply log level to specified modules
+        for part in log_parts:  # log_parts is already a list from nargs='*'
+            logger = logging.getLogger(part.strip())
             logger.setLevel(parts_log_level)
+        logging.info(f"Set logging level {log_level} for parts: {', '.join(log_parts)}")
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Build broadband service geopackage files for US states and territories.')
@@ -54,12 +56,10 @@ def parse_arguments():
     
     args = parser.parse_args()
 
-    # Check if --usage is present
     if args.usage:
         parser.print_usage()
         sys.exit(0)
 
-    # Check if --state is present without any options
     if '--state' in sys.argv and not args.state:
         print("Error: --state argument requires at least one state abbreviation.")
         parser.print_usage()
@@ -67,51 +67,48 @@ def parse_arguments():
 
     return args
 
-def expand_state_ranges(states):
+def expand_state_ranges(state_inputs):
+    """Expand state ranges (e.g., 'AL..AZ') into a list of state abbreviations."""
     state_abbrs = [state[1] for state in STATES_AND_TERRITORIES]
     expanded_states = []
     
-    for state in states:
-        if '..' in state:
-            start, end = state.split('..')
-            if start not in state_abbrs or end not in state_abbrs:
-                raise ValueError(f"Invalid state range: {state}")
-            start_index = state_abbrs.index(start)
-            end_index = state_abbrs.index(end)
-            if start_index > end_index:
-                raise ValueError(f"Invalid state range: {state}")
-            expanded_states.extend(state_abbrs[start_index:end_index + 1])
+    for state_input in state_inputs:
+        if '..' in state_input:
+            start, end = state_input.split('..')
+            if start in state_abbrs and end in state_abbrs:
+                start_idx = state_abbrs.index(start)
+                end_idx = state_abbrs.index(end) + 1  # Inclusive of end
+                expanded_states.extend(state_abbrs[start_idx:end_idx])
+            else:
+                logging.warning(f"Invalid state range: {state_input}. Skipping.")
+                print(f"Invalid state range: {state_input}. Skipping.")
         else:
-            if state not in state_abbrs:
-                logging.error(f"Invalid state abbreviation: {state}")
-                continue  # Skip invalid state
-            expanded_states.append(state)
+            if state_input in state_abbrs:
+                expanded_states.append(state_input)
+            else:
+                logging.warning(f"Invalid state: {state_input}. Skipping.")
+                print(f"Invalid state: {state_input}. Skipping.")
     
     return expanded_states
 
 def monitor_memory(threshold=80):
-    """Monitor memory usage and log a warning if it exceeds the threshold."""
     memory_usage = psutil.virtual_memory().percent
     if memory_usage > threshold:
         logging.warning(f"Memory usage is high: {memory_usage}%")
-        gc.collect()  # Force garbage collection
+        gc.collect()
 
 def download_files():
     logging.info("Downloading files.")
-    # Placeholder for file download logic
     pass
 
 def process_files():
     logging.info("Processing files.")
-    # Placeholder for file processing logic
     pass
 
 def create_geopackage():
     logging.info("Creating GeoPackage.")
-    # Placeholder for GeoPackage creation logic
     pass
 
 def cleanup_files():
     logging.info("Cleaning up files.")
-    # Placeholder for file cleanup logic
     pass

@@ -61,8 +61,7 @@ STATES_AND_TERRITORIES = (
     ("70", "PW", "Palau"),
     ("72", "PR", "Puerto_Rico"),
     ("74", "UM", "U.S._Minor_Outlying_Islands"),
-    ("78", "VI", "U.S._Virgin_Islands"),
-    ("99", "ZZ", "TestData")
+    ("78", "VI", "U.S._Virgin_Islands")
 )
 
 # Technology abbreviation mapping with indicator for speed calculations
