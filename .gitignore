@@ -1,2 +1,22 @@
+# Virtual environment
 venv/
-src/__pycache__
+.env/
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# QGIS project files (optional, if not versioned)
+*.qgs~
+*.qgz~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+*.swp
+*.swo
+*.sublime-workspace
