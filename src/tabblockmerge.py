@@ -190,6 +190,8 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                     "Other": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []]
                 }
 
+                all_location_ids = set()  # To collect all unique LocationIDs across all techs and providers
+
                 for tech_type in tech_types:
                     tech_data = bdc_props.get(tech_type, {})
                     if tech_data and isinstance(tech_data, dict):
@@ -212,7 +214,9 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                                 techs[tech_key][10] = loc_count
                             for cat in ["R", "B", "X"]:
                                 for rec in brand_data.get(cat, []):
-                                    techs[tech_key][11].extend(rec["Locations"].split(","))
+                                    loc_ids = rec["Locations"].split(",")
+                                    techs[tech_key][11].extend(loc_ids)
+                                    all_location_ids.update(loc_ids)  # Add to the total unique set
                     elif tech_data:
                         logging.warning(f"Invalid tech_data for {geoid20}.{tech_type} in techs: {tech_data} (type: {type(tech_data)})")
 
@@ -241,9 +245,9 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                 # Move summary fields directly into properties
                 for tech_key in techs:
                     prefix = tech_key
-                    updated_feature['properties'][f"{prefix}_BrandNames"] = techs[tech_key][0]
-                    updated_feature['properties'][f"{prefix}_providerIDs"] = techs[tech_key][1]
-                    updated_feature['properties'][f"{prefix}_HoldingCompanies"] = techs[tech_key][2]
+                    updated_feature['properties'][f"{prefix}_BrandNames"] = ",".join(techs[tech_key][0]) if techs[tech_key][0] else ""
+                    updated_feature['properties'][f"{prefix}_providerIDs"] = ",".join(techs[tech_key][1]) if techs[tech_key][1] else ""
+                    updated_feature['properties'][f"{prefix}_HoldingCompanies"] = ",".join(techs[tech_key][2]) if techs[tech_key][2] else ""
                     updated_feature['properties'][f"{prefix}_providerCount"] = techs[tech_key][3]
                     updated_feature['properties'][f"{prefix}_LocationCount"] = techs[tech_key][4]
                     updated_feature['properties'][f"{prefix}_ServedCount"] = techs[tech_key][5]
@@ -252,12 +256,15 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                     updated_feature['properties'][f"{prefix}_Dom_ProviderID"] = techs[tech_key][8]
                     updated_feature['properties'][f"{prefix}_Dom_Holding_Company"] = techs[tech_key][9]
                     updated_feature['properties'][f"{prefix}_Dom_LocationCount"] = techs[tech_key][10]
-                    updated_feature['properties'][f"{prefix}_LocationIDs"] = techs[tech_key][11]
-                
+                    updated_feature['properties'][f"{prefix}_LocationIDs"] = ",".join(techs[tech_key][11]) if techs[tech_key][11] else ""
+
                 # Add top-level totals directly to properties
                 updated_feature['properties']["TotalServed"] = total_served
                 updated_feature['properties']["TotalUnderserved"] = total_underserved
                 updated_feature['properties']["TotalUnserved"] = max(feature['properties']['HOUSING20'] - total_served - total_underserved, 0)
+                
+                # Add Total_LocationCount as the last summary field
+                updated_feature['properties']["Total_LocationCount"] = len(all_location_ids)
 
                 if geoid20 == "440070104002010":
                     logging.debug(f"Final feature before write for {geoid20}: {json.dumps(updated_feature, indent=2)}")
@@ -312,6 +319,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
             logging.debug(f"GeoJSON footer written—features array closed")
             f.close()
 
+            # [Rest of the function remains unchanged: chunk merging, validation, etc.]
             if chunk_num > 0:
                 final_temp = output_file + '.final.tmp'
                 with open(final_temp, 'w', encoding='utf-8') as f_final:

@@ -80,33 +80,43 @@ def main():
             try:
                 gdf = gpd.read_file(geojson_4269_file)
                 logging.debug(f"Loaded GeoJSON {geojson_4269_file} into GeoDataFrame")
-                # Check and set CRS
                 if gdf.crs is None or gdf.crs.to_epsg() != 4269:
                     gdf.set_crs(epsg=4269, inplace=True, allow_override=True)
                     logging.debug("Set CRS to EPSG:4269 with override")
                 else:
                     logging.debug("CRS already set to EPSG:4269")
-                gdf_4326 = gdf.to_crs(epsg=4326)      # Reproject to WGS84
+                gdf_4326 = gdf.to_crs(epsg=4326)
                 logging.debug(f"Reprojected GeoDataFrame to EPSG:4326 for state: {state_abbr}")
 
-                # Write final GeoJSON (EPSG:4326)
                 geojson_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.geojson")
                 gdf_4326.to_file(geojson_output_file, driver="GeoJSON")
                 logging.info(f"Final GeoJSON (EPSG:4326) saved to: {geojson_output_file}")
                 
-                # Delete gdf here—done with original 4269 data
                 del gdf
                 gc.collect()
                 logging.debug(f"Memory cleared after writing GeoJSON for state: {state_abbr}")
 
-                # Write final GPKG (EPSG:4326) with overwrite option
+                # Write final GPKG with overwrite
                 gpkg_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.gpkg")
+                layer_name = f"{fips.zfill(2)}_{abbr}_BB"
+                
+                # If the GPKG file exists, delete it to avoid layer conflicts
+                if os.path.exists(gpkg_output_file):
+                    try:
+                        os.remove(gpkg_output_file)
+                        logging.debug(f"Deleted existing GeoPackage file: {gpkg_output_file}")
+                    except OSError as e:
+                        logging.error(f"Failed to delete existing GeoPackage {gpkg_output_file}: {str(e)}")
+                        raise
+                
+                # Write new GPKG with explicit overwrite option
                 gdf_4326.to_file(
                     gpkg_output_file,
                     driver="GPKG",
-                    layer=f"{fips.zfill(2)}_{abbr}_BB",
+                    layer=layer_name,
                     layer_options={"OVERWRITE": "YES"}
                 )
+                logging.info(f"Final GeoPackage (EPSG:4326) saved to: {gpkg_output_file}")
 
             except Exception as e:
                 logging.error(f"Failed to process GeoJSON/GPKG for {state_abbr}: {str(e)}")
