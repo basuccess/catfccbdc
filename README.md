@@ -80,3 +80,67 @@ Submit issues/pull requests to enhance chunking, parallel processing, or memory 
 
 License
 Proprietary—Tarana Wireless internal use. Contact thouweling@taranawireless.com for permissions.
+
+
+
+Example jq commands to inspect geojson:
+
+Replace input.json with the actual filename containing your JSON data, or pipe the JSON into jq like this:
+echo '<your_json_here>' | jq '.features[0].properties.Copper'
+
+If you want a specific subfield within "Copper", such as the AT&T provider details, you can extend the query, e.g., jq '.features[0].properties.Copper."AT&T"'.
+
+To use jq to print the "geometry" field from your JSON data, you can run the following command in your terminal:
+jq '.features[0].geometry' input.json
+
+If you want only specific parts of the "geometry" object (e.g., just the "type" or "coordinates"), you can refine the query:
+For "type" only: jq '.features[0].geometry.type'
+For "coordinates" only: jq '.features[0].geometry.coordinates'
+
+If you want the values printed separately:
+
+For just "id":
+
+jq '.features[0].properties.id' input.json
+Output: "481390602122026"
+
+For just "Total_LocationCount":
+
+jq '.features[0].properties.Total_LocationCount' input.json
+Output: 6
+
+Replace input.json with your actual JSON file name, or pipe the JSON into jq:
+
+
+echo '<your_json_here>' | jq '.features[0].properties | {id: .id, Total_LocationCount: .Total_LocationCount}'
+If you want the output in a different format (e.g., raw values without JSON structure), you can use the -r flag with jq and adjust the query accordingly.
+
+To print the "id" field for all features in a GeoJSON file using jq, you can use the following command:
+
+jq '.features[].properties.id' input.json
+
+Explanation:
+.features[] iterates over all elements in the "features" array.
+.properties accesses the "properties" object within each feature.
+.id extracts the "id" field from the "properties" object.
+
+Output:
+For your provided GeoJSON (which contains only one feature), the output would be:
+
+"481390602122026"
+
+If your GeoJSON file has multiple features, it will print the "id" for each feature on a new line. For example, if you had two features with "id" values "481390602122026" and "481390602122027", the output would be:
+
+"481390602122026"
+"481390602122027"
+
+Notes:
+Replace input.json with the name of your GeoJSON file.
+If you want the output without quotes (raw strings), use the -r flag:
+
+jq -r '.features[].properties.id' input.json
+Output for your example:
+
+481390602122026
+
+If your file has no features or the "id" field is missing in some features, jq will skip those cases silently unless you add error handling (e.g., with // "missing").

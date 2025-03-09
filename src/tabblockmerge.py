@@ -120,13 +120,13 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
     f = None
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write(json.dumps(header, ensure_ascii=False, indent=2)[:-3])
-            f.write('\n  ')
+            # Write the opening of the FeatureCollection
+            f.write('{"type":"FeatureCollection","features":[')
             first = True
 
             for i, feature in enumerate(tabblock_geojson['features']):
                 if not first:
-                    f.write(',\n  ')
+                    f.write(',')
                 else:
                     first = False
                 geoid20 = feature['properties']['block_geoid']
@@ -190,7 +190,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                     "Other": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []]
                 }
 
-                all_location_ids = set()  # To collect all unique LocationIDs across all techs and providers
+                all_location_ids = set()
 
                 for tech_type in tech_types:
                     tech_data = bdc_props.get(tech_type, {})
@@ -216,19 +216,16 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                                 for rec in brand_data.get(cat, []):
                                     loc_ids = rec["Locations"].split(",")
                                     techs[tech_key][11].extend(loc_ids)
-                                    all_location_ids.update(loc_ids)  # Add to the total unique set
+                                    all_location_ids.update(loc_ids)
                     elif tech_data:
                         logging.warning(f"Invalid tech_data for {geoid20}.{tech_type} in techs: {tech_data} (type: {type(tech_data)})")
 
                 for tech_key in techs:
                     techs[tech_key][11] = sorted(list(set(techs[tech_key][11])))
 
-                stats_json = json.dumps(stats, ensure_ascii=False)
-
                 if "NAME20" in updated_feature["properties"]:
                     del updated_feature["properties"]["NAME20"]
                 
-                # Update properties with tech-specific fields
                 updated_feature['properties'].update({
                     "Copper": bdc_props.get("Copper") if bdc_props.get("Copper") else None,
                     "Cable": bdc_props.get("Cable") if bdc_props.get("Cable") else None,
@@ -239,10 +236,12 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                     "LicFWA": bdc_props.get("LicFWA") if bdc_props.get("LicFWA") else None,
                     "LBRFWA": bdc_props.get("LBRFWA") if bdc_props.get("LBRFWA") else None,
                     "Other": bdc_props.get("Other") if bdc_props.get("Other") else None,
-                    "stats": stats_json
+                    "stats": stats,
+                    "TotalServed": total_served,
+                    "TotalUnderserved": total_underserved,
+                    "TotalUnserved": max(feature['properties']['HOUSING20'] - total_served - total_underserved, 0)
                 })
 
-                # Move summary fields directly into properties
                 for tech_key in techs:
                     prefix = tech_key
                     updated_feature['properties'][f"{prefix}_BrandNames"] = ",".join(techs[tech_key][0]) if techs[tech_key][0] else ""
@@ -258,12 +257,6 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                     updated_feature['properties'][f"{prefix}_Dom_LocationCount"] = techs[tech_key][10]
                     updated_feature['properties'][f"{prefix}_LocationIDs"] = ",".join(techs[tech_key][11]) if techs[tech_key][11] else ""
 
-                # Add top-level totals directly to properties
-                updated_feature['properties']["TotalServed"] = total_served
-                updated_feature['properties']["TotalUnderserved"] = total_underserved
-                updated_feature['properties']["TotalUnserved"] = max(feature['properties']['HOUSING20'] - total_served - total_underserved, 0)
-                
-                # Add Total_LocationCount as the last summary field
                 updated_feature['properties']["Total_LocationCount"] = len(all_location_ids)
 
                 if geoid20 == "440070104002010":
@@ -271,7 +264,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
 
                 try:
                     shape(updated_feature['geometry'])
-                    feature_str = json.dumps(updated_feature, ensure_ascii=False, indent=2)
+                    feature_str = json.dumps(updated_feature, ensure_ascii=False, indent=None)
                     json.loads(feature_str)
                     if not all(k in ['type', 'id', 'properties', 'geometry'] for k in updated_feature) or 'type' not in updated_feature['geometry']:
                         raise ValueError("Invalid GeoJSON structure")
@@ -298,7 +291,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                     logging.debug(f"Processed {i} features; Memory: {mem_percent:.1f}%")
                 
                 if features_written_in_chunk >= chunk_size and i < expected_features - 1:
-                    f.write('\n  ]')
+                    f.write(']')
                     f.flush()
                     f.close()
                     chunk_num += 1
@@ -311,35 +304,34 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                         raise
                     temp_file = f"{output_file}.tmp"
                     f = open(temp_file, 'w', encoding='utf-8')
-                    f.write('[\n  ')
+                    f.write('{"type":"FeatureCollection","features":[')
                     features_written_in_chunk = 0
                     first = True
 
-            f.write('\n]}')
+            # Close the features array and FeatureCollection
+            f.write(']}')
             logging.debug(f"GeoJSON footer written—features array closed")
             f.close()
 
-            # [Rest of the function remains unchanged: chunk merging, validation, etc.]
             if chunk_num > 0:
                 final_temp = output_file + '.final.tmp'
                 with open(final_temp, 'w', encoding='utf-8') as f_final:
-                    f_final.write(json.dumps(header, ensure_ascii=False, indent=2)[:-3])
-                    f_final.write('\n  ')
+                    f_final.write('{"type":"FeatureCollection","features":[')
                     first_feature = True
                     for c in range(chunk_num + 1):
                         chunk_file = f"{output_file}.chunk{c}.tmp" if c > 0 else temp_file
                         with open(chunk_file, 'r') as f_chunk:
                             chunk_text = f_chunk.read()
-                            start = chunk_text.index('[') + 1
-                            end = chunk_text.rindex(']')
+                            start = chunk_text.find('[') + 1
+                            end = chunk_text.rfind(']')
                             features_text = chunk_text[start:end].strip()
                             if features_text:
                                 if not first_feature:
-                                    f_final.write(',\n  ')
+                                    f_final.write(',')
                                 f_final.write(features_text)
                                 first_feature = False
                         os.remove(chunk_file)
-                    f_final.write('\n]}')
+                    f_final.write(']}')
                 if os.path.exists(output_file):
                     os.remove(output_file)
                 try:

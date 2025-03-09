@@ -78,18 +78,29 @@ def main():
 
             # Read, reproject, and write final outputs
             try:
-                gdf = gpd.read_file(geojson_4269_file)
-                logging.debug(f"Loaded GeoJSON {geojson_4269_file} into GeoDataFrame")
+                # Read the 4269 GeoJSON, ensuring nested objects are preserved
+                with open(geojson_4269_file, 'r', encoding='utf-8') as f:
+                    geojson_data = json.load(f)
+                gdf = gpd.GeoDataFrame.from_features(geojson_data['features'], crs="EPSG:4269")
+                logging.debug(f"Loaded GeoJSON {geojson_4269_file} into GeoDataFrame with {len(gdf)} features")
+
+                # Verify CRS
                 if gdf.crs is None or gdf.crs.to_epsg() != 4269:
                     gdf.set_crs(epsg=4269, inplace=True, allow_override=True)
                     logging.debug("Set CRS to EPSG:4269 with override")
                 else:
                     logging.debug("CRS already set to EPSG:4269")
+
+                # Reproject to 4326
                 gdf_4326 = gdf.to_crs(epsg=4326)
                 logging.debug(f"Reprojected GeoDataFrame to EPSG:4326 for state: {state_abbr}")
 
+                # Write GeoJSON without indentation, preserving nested objects
                 geojson_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.geojson")
-                gdf_4326.to_file(geojson_output_file, driver="GeoJSON")
+                with open(geojson_output_file, 'w', encoding='utf-8') as f:
+                    # Parse the JSON string and extract features, then write as compact JSON
+                    geojson_dict = json.loads(gdf_4326.to_json(indent=None, na="null"))
+                    f.write(json.dumps(geojson_dict, ensure_ascii=False, indent=None))
                 logging.info(f"Final GeoJSON (EPSG:4326) saved to: {geojson_output_file}")
                 
                 del gdf
