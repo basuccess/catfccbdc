@@ -7,6 +7,8 @@ import os
 import sys
 import gc
 import tempfile
+import ijson
+from decimal import Decimal
 from constant import TECH_ABBR_MAPPING
 from functions import setup_logging, parse_arguments, expand_state_ranges
 from prep import check_required_directories, get_state_info
@@ -17,6 +19,129 @@ def decimal_to_json_serializable(obj):
     if isinstance(obj, Decimal):
         return float(obj)
     return obj
+
+def parse_geojson_with_ijson(file_path):
+    """Parse GeoJSON file using ijson, correctly handling nested coordinate arrays and properties."""
+    with open(file_path, 'rb') as f:
+        parser = ijson.parse(f)
+        features = []
+        current_feature = None
+        current_geometry = None
+        geometry_stack = []
+        coord_stack = []
+        properties_stack = []
+
+        for prefix, event, value in parser:
+            if prefix == 'features.item' and event == 'start_map':
+                current_feature = {"type": "Feature", "properties": {}}
+                properties_stack = [current_feature['properties']]
+                geometry_stack = []
+                coord_stack = []
+            elif prefix == 'features.item' and event == 'end_map':
+                if current_feature:
+                    if current_geometry and "type" in current_geometry:
+                        if "coordinates" not in current_geometry or not isinstance(current_geometry["coordinates"], list):
+                            logging.debug(f"Feature with id {current_feature.get('id', 'unknown')} has invalid geometry: {current_geometry}")
+                            current_geometry = {"type": "GeometryCollection", "geometries": []}
+                        current_feature['geometry'] = current_geometry
+                    else:
+                        logging.debug(f"Feature with id {current_feature.get('id', 'unknown')} has no valid geometry")
+                        current_feature['geometry'] = {"type": "GeometryCollection", "geometries": []}
+                    features.append(current_feature)
+                    if len(features) == 1:
+                        logging.debug(f"First parsed feature geometry: {features[0]['geometry']}")
+                current_feature = None
+                current_geometry = None
+                properties_stack = []
+                geometry_stack = []
+                coord_stack = []
+            elif prefix.startswith('features.item.geometry'):
+                if current_feature is None:
+                    continue
+                keys = prefix.split('.')[2:]
+                if event == 'start_map':
+                    new_dict = {}
+                    if not geometry_stack:
+                        current_geometry = new_dict
+                        geometry_stack.append(new_dict)
+                    else:
+                        geometry_stack[-1][keys[-1]] = new_dict
+                        geometry_stack.append(new_dict)
+                elif event == 'end_map':
+                    if geometry_stack:
+                        geometry_stack.pop()
+                elif event == 'start_array':
+                    if keys[-1] == 'coordinates':
+                        geometry_stack[-1]['coordinates'] = []
+                        coord_stack = [geometry_stack[-1]['coordinates']]
+                    elif coord_stack:
+                        new_array = []
+                        coord_stack[-1].append(new_array)
+                        coord_stack.append(new_array)
+                elif event == 'end_array':
+                    if coord_stack:
+                        coord_stack.pop()
+                elif event == 'number':
+                    if coord_stack:
+                        coord_stack[-1].append(float(value))
+                elif event == 'string':
+                    if keys[-1] == 'type':
+                        geometry_stack[-1]['type'] = value
+                elif event == 'null':
+                    if keys[-1] == 'coordinates':
+                        geometry_stack[-1]['coordinates'] = []
+            elif prefix.startswith('features.item.properties'):
+                if current_feature is None:
+                    continue
+                keys = prefix.split('.')[2:]
+                if event == 'start_map':
+                    if len(keys) > 1:
+                        if keys[-1] == 'item':
+                            if not properties_stack or not isinstance(properties_stack[-1], list):
+                                logging.error(f"Expected list at {prefix}")
+                                continue
+                            new_dict = {}
+                            properties_stack[-1].append(new_dict)
+                            properties_stack.append(new_dict)
+                        else:
+                            if not properties_stack or not isinstance(properties_stack[-1], dict):
+                                logging.error(f"Expected dict at {prefix}")
+                                continue
+                            new_dict = {}
+                            properties_stack[-1][keys[-1]] = new_dict
+                            properties_stack.append(new_dict)
+                elif event == 'start_array':
+                    if keys[-1] == 'item':
+                        logging.error(f"Unexpected start_array for 'item' at {prefix}")
+                        continue
+                    else:
+                        if not properties_stack or not isinstance(properties_stack[-1], dict):
+                            logging.error(f"Expected dict at {prefix}")
+                            continue
+                        new_array = []
+                        properties_stack[-1][keys[-1]] = new_array
+                        properties_stack.append(new_array)
+                elif event in ('string', 'number', 'boolean', 'null'):
+                    if keys[-1] == 'item':
+                        if not properties_stack or not isinstance(properties_stack[-1], list):
+                            logging.error(f"Expected list at {prefix}")
+                            continue
+                        properties_stack[-1].append(value)
+                    else:
+                        if not properties_stack or not isinstance(properties_stack[-1], dict):
+                            logging.error(f"Expected dict at {prefix}")
+                            continue
+                        properties_stack[-1][keys[-1]] = value
+                elif event == 'end_map' or event == 'end_array':
+                    if properties_stack:
+                        properties_stack.pop()
+            elif prefix == 'features.item.id' and event in ('string', 'number'):
+                current_feature['id'] = value
+
+        if not features:
+            raise ValueError(f"No valid features parsed from {file_path}")
+        logging.debug(f"Parsed {len(features)} features from {file_path}")
+        return {"type": "FeatureCollection", "features": features}
 
 def main():
     args = parse_arguments()
@@ -40,7 +165,6 @@ def main():
     with tempfile.TemporaryDirectory() as temp_dir:
         for state_abbr in states_to_process:
             state_input_bdc_dir, state_input_tabblock_dir = check_required_directories(base_dir, state_abbr)
-            # Use state_input_bdc_dir as default, override with args.output_dir if provided and valid
             state_output_dir = state_input_bdc_dir
             if args.output_dir and os.path.isdir(os.path.dirname(args.output_dir)):
                 state_output_dir = os.path.join(args.output_dir, f"{get_state_info(state_abbr)[0]}_{state_abbr}_{get_state_info(state_abbr)[2]}")
@@ -63,42 +187,58 @@ def main():
             del bdc_feature_collection
             gc.collect()
 
-            # Process Tabblock20 and merge to temporary GeoJSON (EPSG:4269)
             logging.info(f"Processing Tabblock20 data for state: {state_abbr}")
-            tabblock_json_file = process_tabblock_data(base_dir, state_abbr, temp_dir)
+            try:
+                tabblock_json_file = process_tabblock_data(base_dir, state_abbr, temp_dir)
+                logging.debug(f"Tabblock JSON file created: {tabblock_json_file}")
+            except Exception as e:
+                logging.error(f"Failed to process Tabblock20 data for {state_abbr}: {str(e)}")
+                raise
+
             fips, abbr, name = get_state_info(state_abbr)
             geojson_4269_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB_4269.geojson")
             stream_merge_bdc_stats(tabblock_json_file, {f['id']: f['properties'] for f in service_stats['features']}, geojson_4269_file)
             logging.info(f"Temporary GeoJSON (EPSG:4269) saved to: {geojson_4269_file}")
             
-            # Delete service_stats here—done with BDC data
             del service_stats
             gc.collect()
             logging.debug(f"Memory cleared after merging BDC data for state: {state_abbr}")
 
-            # Read, reproject, and write final outputs
             try:
-                # Read the 4269 GeoJSON, ensuring nested objects are preserved
-                with open(geojson_4269_file, 'r', encoding='utf-8') as f:
-                    geojson_data = json.load(f)
-                gdf = gpd.GeoDataFrame.from_features(geojson_data['features'], crs="EPSG:4269")
-                logging.debug(f"Loaded GeoJSON {geojson_4269_file} into GeoDataFrame with {len(gdf)} features")
+                geojson_data = parse_geojson_with_ijson(geojson_4269_file)
+                valid_features = geojson_data['features']
+                logging.debug(f"Loaded GeoJSON {geojson_4269_file} with {len(valid_features)} features")
+                logging.debug(f"First feature id: {valid_features[0].get('id')}")
 
-                # Verify CRS
+                gdf = gpd.GeoDataFrame.from_features(valid_features, crs="EPSG:4269")
+                logging.debug(f"Created GeoDataFrame with {len(gdf)} features for state: {state_abbr}")
+                logging.debug(f"GeoDataFrame index sample: {gdf.index[:5].tolist()}")
+                logging.debug(f"GeoDataFrame columns: {list(gdf.columns)}")
+
+                if not all(gdf.index == gdf['GEOID20']):
+                    logging.debug("Index does not match GEOID20, resetting to GEOID20")
+                    gdf.set_index('GEOID20', inplace=True, drop=True)  # Changed drop=False to drop=True
+
                 if gdf.crs is None or gdf.crs.to_epsg() != 4269:
                     gdf.set_crs(epsg=4269, inplace=True, allow_override=True)
                     logging.debug("Set CRS to EPSG:4269 with override")
                 else:
                     logging.debug("CRS already set to EPSG:4269")
 
-                # Reproject to 4326
                 gdf_4326 = gdf.to_crs(epsg=4326)
                 logging.debug(f"Reprojected GeoDataFrame to EPSG:4326 for state: {state_abbr}")
 
-                # Write GeoJSON without indentation, preserving nested objects
+                # Delete existing GeoJSON file if it exists
                 geojson_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.geojson")
+                if os.path.exists(geojson_output_file):
+                    try:
+                        os.remove(geojson_output_file)
+                        logging.debug(f"Deleted existing GeoJSON file: {geojson_output_file}")
+                    except OSError as e:
+                        logging.error(f"Failed to delete existing GeoJSON {geojson_output_file}: {str(e)}")
+                        raise
+
                 with open(geojson_output_file, 'w', encoding='utf-8') as f:
-                    # Parse the JSON string and extract features, then write as compact JSON
                     geojson_dict = json.loads(gdf_4326.to_json(indent=None, na="null"))
                     f.write(json.dumps(geojson_dict, ensure_ascii=False, indent=None))
                 logging.info(f"Final GeoJSON (EPSG:4326) saved to: {geojson_output_file}")
@@ -107,11 +247,9 @@ def main():
                 gc.collect()
                 logging.debug(f"Memory cleared after writing GeoJSON for state: {state_abbr}")
 
-                # Write final GPKG with overwrite
+                # Delete existing GeoPackage file if it exists
                 gpkg_output_file = os.path.join(state_output_dir, f"{fips.zfill(2)}_{abbr}_BB.gpkg")
                 layer_name = f"{fips.zfill(2)}_{abbr}_BB"
-                
-                # If the GPKG file exists, delete it to avoid layer conflicts
                 if os.path.exists(gpkg_output_file):
                     try:
                         os.remove(gpkg_output_file)
@@ -120,7 +258,6 @@ def main():
                         logging.error(f"Failed to delete existing GeoPackage {gpkg_output_file}: {str(e)}")
                         raise
                 
-                # Write new GPKG with explicit overwrite option
                 gdf_4326.to_file(
                     gpkg_output_file,
                     driver="GPKG",
@@ -130,10 +267,9 @@ def main():
                 logging.info(f"Final GeoPackage (EPSG:4326) saved to: {gpkg_output_file}")
 
             except Exception as e:
-                logging.error(f"Failed to process GeoJSON/GPKG for {state_abbr}: {str(e)}")
+                logging.error(f"Failed to process GeoJSON/GPKG for {state_abbr}: {str(e)}", exc_info=True)
                 raise
 
-            # Final cleanup
             del gdf_4326
             gc.collect()
             logging.info(f"Memory cleared after processing state: {state_abbr}")

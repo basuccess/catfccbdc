@@ -93,6 +93,14 @@ def create_empty_feature(block_geoid):
         "geometry": None
     }
 
+def sanitize_string(s):
+    """Remove or escape control characters from a string."""
+    if pd.isna(s):
+        return ""
+    s = str(s)
+    # Replace control characters with their escaped equivalents or remove them
+    return ''.join(c if ord(c) >= 32 or c in '\n\t\r' else '' for c in s)
+
 def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
     summary = {}
     all_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values()]
@@ -100,15 +108,15 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
     logging.debug(f"Processing chunk with {len(df_chunk)} rows")
     for _, row in df_chunk.iterrows():
         block_geoid = row['block_geoid']
-        brand_name = row['brand_name']
-        provider_id = row['provider_id']
-        holding_company = holder_mapping.get(provider_id, "Unknown")
+        brand_name = sanitize_string(row['brand_name'])
+        provider_id = sanitize_string(row['provider_id'])
+        holding_company = sanitize_string(holder_mapping.get(provider_id, "Unknown"))
         tech_abbr = TECH_ABBR_MAPPING[row['technology']][0]
         business_residential_code = row['business_residential_code']
         max_adv_dl_speed = str(row['max_advertised_download_speed'])
         max_adv_ul_speed = str(row['max_advertised_upload_speed'])
         low_latency = str(int(row['low_latency']))
-        served_location = row['location_id']
+        served_location = sanitize_string(row['location_id'])
         
         logging.debug(f"Processing row: block_geoid={block_geoid}, tech_abbr={tech_abbr}, brand_name={brand_name}, location_id={served_location}")
         
@@ -302,7 +310,7 @@ def process_bdc_files(base_dir, state_dir):
     log_memory_usage("After merging BDC summaries")
     return feature_collection
 
-# bdcprocessing.py (Only showing changed function; keep others as in your last working version)
+# bdcprocessing.py (only showing the updated function)
 
 def calculate_service_statistics(feature_collection):
     logging.info("Calculating service statistics.")
@@ -310,59 +318,73 @@ def calculate_service_statistics(feature_collection):
     monitor_memory()
     
     features = feature_collection["features"]
-    valid_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values() if v[1]]  # Only True-flagged techs
+    valid_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values() if v[1]]  # True-flagged techs for scoring
+    all_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values()]  # All techs for total location count
     
     for feature in features:
         block_geoid = feature["id"]
         properties = feature["properties"]
         
-        location_scores = {}
+        # Track all locations across all technologies for Total_LocationCount
+        all_locations = set()
+        # Track locations per tech and their best service score
+        tech_locations = {tech: set() for tech in all_tech_abbrs}  # Unique locations per tech
+        location_scores = {}  # Best score per location for valid techs
         
-        for tech_abbr in valid_tech_abbrs:
+        # First pass: Collect all locations and score valid techs
+        for tech_abbr in all_tech_abbrs:
             if tech_abbr in properties and properties[tech_abbr] is not None:
                 providers = properties[tech_abbr]
                 for brand_name, provider_data in providers.items():
                     for br_code in ["R", "B", "X"]:
                         for record in provider_data[br_code]:
-                            served_locations = record["Locations"].split(",")  # Fixed from "Served_Location"
-                            for location_id in served_locations:
-                                score = 0
-                                if (int(record["max_Adv_DL_speed"]) >= SERVED_DL_SPEED and 
-                                    int(record["max_Adv_UL_speed"]) >= SERVED_UL_SPEED and 
-                                    record["low_latency"] == "1"):
-                                    score = 2
-                                elif (int(record["max_Adv_DL_speed"]) >= UNDERSERVED_DL_SPEED and 
-                                      int(record["max_Adv_UL_speed"]) >= UNDERSERVED_UL_SPEED and 
-                                      record["low_latency"] == "1"):
-                                    score = 1
-                                
-                                if (location_id not in location_scores or 
-                                    location_scores[location_id]['score'] < score):
-                                    location_scores[location_id] = {
-                                        'score': score,
-                                        'category': br_code,
-                                        'max_Adv_DL_speed': int(record["max_Adv_DL_speed"]),
-                                        'max_Adv_UL_speed': int(record["max_Adv_UL_speed"]),
-                                        'low_latency': int(record["low_latency"]),
-                                        'brand_name': brand_name
-                                    }
-                                elif location_scores[location_id]['score'] == score:
-                                    current_speed_sum = (location_scores[location_id]['max_Adv_DL_speed'] + 
-                                                        location_scores[location_id]['max_Adv_UL_speed'])
-                                    new_speed_sum = int(record["max_Adv_DL_speed"]) + int(record["max_Adv_UL_speed"])
-                                    if new_speed_sum > current_speed_sum:
+                            served_locations = record["Locations"].split(",")
+                            all_locations.update(served_locations)
+                            tech_locations[tech_abbr].update(served_locations)
+                            if tech_abbr in valid_tech_abbrs:
+                                for location_id in served_locations:
+                                    score = 0
+                                    dl_speed = int(record["max_Adv_DL_speed"])
+                                    ul_speed = int(record["max_Adv_UL_speed"])
+                                    latency = record["low_latency"]
+                                    if (dl_speed >= SERVED_DL_SPEED and 
+                                        ul_speed >= SERVED_UL_SPEED and 
+                                        latency == "1"):
+                                        score = 2
+                                    elif (dl_speed >= UNDERSERVED_DL_SPEED and 
+                                          ul_speed >= UNDERSERVED_UL_SPEED and 
+                                          latency == "1"):
+                                        score = 1
+                                    
+                                    if (location_id not in location_scores or 
+                                        location_scores[location_id]['score'] < score):
                                         location_scores[location_id] = {
                                             'score': score,
                                             'category': br_code,
-                                            'max_Adv_DL_speed': int(record["max_Adv_DL_speed"]),
-                                            'max_Adv_UL_speed': int(record["max_Adv_UL_speed"]),
-                                            'low_latency': int(record["low_latency"]),
-                                            'brand_name': brand_name
+                                            'max_Adv_DL_speed': dl_speed,
+                                            'max_Adv_UL_speed': ul_speed,
+                                            'low_latency': int(latency),
+                                            'brand_name': brand_name,
+                                            'tech': tech_abbr
                                         }
+                                    elif location_scores[location_id]['score'] == score:
+                                        current_speed_sum = (location_scores[location_id]['max_Adv_DL_speed'] + 
+                                                            location_scores[location_id]['max_Adv_UL_speed'])
+                                        new_speed_sum = dl_speed + ul_speed
+                                        if new_speed_sum > current_speed_sum:
+                                            location_scores[location_id] = {
+                                                'score': score,
+                                                'category': br_code,
+                                                'max_Adv_DL_speed': dl_speed,
+                                                'max_Adv_UL_speed': ul_speed,
+                                                'low_latency': int(latency),
+                                                'brand_name': brand_name,
+                                                'tech': tech_abbr
+                                            }
         
-        # Build stats with unique location_ids
+        # Calculate stats with location lists for valid techs
         stats = {
-            "Total BSLs": len(location_scores),  # Unique location_ids
+            "Total BSLs": len(all_locations),
             "Total Residential BLSs": len({lid for lid, data in location_scores.items() if data['category'] in ["R", "X"]}),
             "R": {"2": [], "1": [], "0": [], "Served": 0, "Underserved": 0},
             "B": {"2": [], "1": [], "0": [], "Served": 0, "Underserved": 0},
@@ -378,12 +400,48 @@ def calculate_service_statistics(feature_collection):
             elif score == 1:
                 stats[br_code]["Underserved"] += 1
         
+        # Compute overall totals
         total_served = sum(stats[br_code]["Served"] for br_code in ["R", "B", "X"])
         total_underserved = sum(stats[br_code]["Underserved"] for br_code in ["R", "B", "X"])
+        total_unserved = len(all_locations) - total_served - total_underserved
+        total_unserved = max(total_unserved, 0)
+        
+        # Add per-tech aggregates with location lists
+        for tech_abbr in all_tech_abbrs:
+            if tech_abbr in properties and properties[tech_abbr] is not None:
+                tech_served = 0
+                tech_underserved = 0
+                tech_locations_set = tech_locations[tech_abbr]
+                if tech_abbr in valid_tech_abbrs:
+                    for loc_id in tech_locations_set:
+                        if loc_id in location_scores:
+                            score = location_scores[loc_id]['score']
+                            if score == 2 and location_scores[loc_id]['tech'] == tech_abbr:
+                                tech_served += 1
+                            elif score == 1 and location_scores[loc_id]['tech'] == tech_abbr:
+                                tech_underserved += 1
+                # Store deduplicated counts and location list
+                properties[f"{tech_abbr}_LocationCount"] = len(tech_locations_set)
+                properties[f"{tech_abbr}_ServedCount"] = tech_served
+                properties[f"{tech_abbr}_UnderservedCount"] = tech_underserved
+                properties[f"{tech_abbr}_LocationIDs"] = ",".join(sorted(tech_locations_set))
+        
+        # Update properties
         feature["properties"]["stats"] = stats
         feature["properties"]["TotalServed"] = total_served
         feature["properties"]["TotalUnderserved"] = total_underserved
-        feature["properties"]["TotalUnserved"] = stats["Total BSLs"] - total_served - total_underserved if stats["Total BSLs"] - total_served - total_underserved > 0 else 0
+        feature["properties"]["TotalUnserved"] = total_unserved
+        feature["properties"]["Total_LocationCount"] = len(all_locations)
+        
+        # Debug logging
+        if block_geoid == "440010308003001":
+            logging.debug(f"Stats for {block_geoid}: Total_LocationCount={len(all_locations)}, "
+                          f"TotalServed={total_served}, TotalUnderserved={total_underserved}, "
+                          f"TotalUnserved={total_unserved}, "
+                          f"LicFWA_LocationCount={properties.get('LicFWA_LocationCount')}, "
+                          f"LicFWA_UnderservedCount={properties.get('LicFWA_UnderservedCount')}, "
+                          f"GeoSat_LocationCount={properties.get('GeoSat_LocationCount')}, "
+                          f"LicFWA_LocationIDs={properties.get('LicFWA_LocationIDs')}")
     
     logging.debug(f"Service statistics output: {json.dumps(feature_collection['features'][0], indent=2, default=decimal_to_json_serializable)}")
     return feature_collection

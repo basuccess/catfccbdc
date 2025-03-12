@@ -144,3 +144,27 @@ Output for your example:
 481390602122026
 
 If your file has no features or the "id" field is missing in some features, jq will skip those cases silently unless you add error handling (e.g., with // "missing").
+
+
+To print the id and TotalUnderserved:
+jq -c '.features[0].properties | {id: .id, TotalUnderserved: .TotalUnderserved}' 44_RI_BB.geojson
+
+{"id":"440010308003001","TotalUnderserved":0}
+
+jq -r '.features[] | select(.properties.id == "010510303002049") | .properties | "\"id\": \"\(.id)\", \"TotalUnderserved\": \(.TotalUnderserved)"' 01_AL_BB.geojson
+
+"id": "010510303002049", "TotalUnderserved": 0
+
+To print these 10 features in landscape mode:
+
+jq -r '.features[0:3] | .[] | .properties | "\"id\": \(.id), \"Copper\": \(.Copper), \"Fiber\": \(.Fiber), \"Cable\": \(.Cable), \"LicFWA\": \(.LicFWA)"' 01_AL_BB.geojson 
+
+"id": 011170308002034, "Copper": null, "Fiber": {"AT&T":{"provider_id":"130077","Holding_Company":"AT&T Inc.","Location_Count":4,"R":[],"B":[],"X":[{"max_Adv_DL_speed":"5000","max_Adv_UL_speed":"5000","low_latency":"1","Locations":"1306641792,1306641793,1306641794,1306641808","Location_Count":4}]}}, "Cable": null, "LicFWA": {"T-Mobile":{"provider_id":"130403","Holding_Company":"T-Mobile USA, Inc.","Location_Count":3,"R":[],"B":[],"X":[{"max_Adv_DL_speed":"0","max_Adv_UL_speed":"0","low_latency":"1","Locations":"1306642546,1306642547","Location_Count":2},{"max_Adv_DL_speed":"25","max_Adv_UL_speed":"3","low_latency":"1","Locations":"1306641794","Location_Count":1}]},"Verizon":{"provider_id":"131425","Holding_Company":"Verizon Communications Inc.","Location_Count":1,"R":[],"B":[{"max_Adv_DL_speed":"10","max_Adv_UL_speed":"1","low_latency":"1","Locations":"1306641791","Location_Count":1}],"X":[]}}
+"id": 011170304082069, "Copper": null, "Fiber": null, "Cable": null, "LicFWA": null
+"id": 011170301022067, "Copper": {"AT&T":{"provider_id":"130077","Holding_Company":"AT&T Inc.","Location_Count":1,"R":[],"B":[],"X":[{"max_Adv_DL_speed":"100","max_Adv_UL_speed":"20","low_latency":"1","Locations":"1306630196","Location_Count":1}]}}, "Fiber": null, "Cable": {"Spectrum":{"provider_id":"130235","Holding_Company":"Charter Communications","Location_Count":5,"R":[{"max_Adv_DL_speed":"1000","max_Adv_UL_speed":"35","low_latency":"1","Locations":"1306630197,1306640910,1306640911","Location_Count":3}],"B":[{"max_Adv_DL_speed":"1000","max_Adv_UL_speed":"35","low_latency":"1","Locations":"1306630196,1306630198","Location_Count":2}],"X":[]}}, "LicFWA": {"T-Mobile":{"provider_id":"130403","Holding_Company":"T-Mobile USA, Inc.","Location_Count":4,"R":[],"B":[{"max_Adv_DL_speed":"25","max_Adv_UL_speed":"3","low_latency":"1","Locations":"1306630196","Location_Count":1}],"X":[{"max_Adv_DL_speed":"25","max_Adv_UL_speed":"3","low_latency":"1","Locations":"1306630197,1306640910,1306640911","Location_Count":3}]},"Verizon":{"provider_id":"131425","Holding_Company":"Verizon Communications Inc.","Location_Count":2,"R":[],"B":[{"max_Adv_DL_speed":"10","max_Adv_UL_speed":"1","low_latency":"1","Locations":"1306630196,1306630198","Location_Count":2}],"X":[]}}
+"id": 011170302151086, "Copper": {"AT&T":{"provider_id":"130077","Holding_Company":"AT&T Inc.","Location_Count":2,"R":[],"B":[],"X":[{"max_Adv_DL_speed":"25","max_Adv_UL_speed":"5","low_latency":"1","Locations":"1306648275,1306648277","Location_Count":2}]}}, "Fiber": null, "Cable": {"Spectrum":{"provider_id":"130235","Holding_Company":"Charter Communications","Location_Count":1,"R":[{"max_Adv_DL_speed":"1000","max_Adv_UL_speed":"35","low_latency":"1","Locations":"1306648277","Location_Count":1}],"B":[],"X":[]}}, "LicFWA": {"T-Mobile":{"provider_id":"130403","Holding_Company":"T-Mobile USA, Inc.","Location_Count":2,"R":[],"B":[],"X":[{"max_Adv_DL_speed":"0","max_Adv_UL_speed":"0","low_latency":"1","Locations":"1306648275,1306648277","Location_Count":2}]}
+
+
+jq -c '.features[0:3] | map({ "id": .properties.id, "geometry": .geometry })' 44_RI_BB_4269.geojson
+
+[{"id":"1","geometry":{"type":"Point","coordinates":[0,0]}},{"id":"2","geometry":{"type":"Point","coordinates":[1,1]}},{"id":"3","geometry":{"type":"Point","coordinates":[2,2]}}]

@@ -6,12 +6,26 @@ import json
 import fiona
 from fiona import Env
 import psutil
-import shutil  # Added this import to resolve the NameError
-from copy import deepcopy  # Added this import to resolve the NameError
+import shutil
+import glob  # Add this import for file pattern matching
+import re    # Add this import for regex operations
+import traceback  # Add this import for error tracing
+from copy import deepcopy
 from shapely.geometry import shape, mapping
 from functools import wraps
 import time
-from constant import TECH_ABBR_MAPPING  # Import from constant.py
+from constant import TECH_ABBR_MAPPING, SERVED_DL_SPEED, SERVED_UL_SPEED, LOW_LATENCY, UNDERSERVED_DL_SPEED, UNDERSERVED_UL_SPEED
+# Import from constant.py
+from prep import check_required_files, get_state_info
+
+def decimal_to_json_serializable(obj):
+    """Convert decimal.Decimal objects to float for JSON serialization."""
+    import decimal
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
+    elif hasattr(obj, '__geo_interface__'):
+        return obj.__geo_interface__
+    return str(obj)
 
 # Retry decorator for handling transient GDAL/Fiona errors
 def retry(max_attempts=5, delay=3):
@@ -30,8 +44,6 @@ def retry(max_attempts=5, delay=3):
                     time.sleep(delay)
         return wrapper
     return decorator
-
-from prep import check_required_files, get_state_info
 
 def process_tabblock_data(base_dir, state_abbr, temp_dir):
     logging.info(f"Processing Tabblock20 data for state: {state_abbr}")
@@ -93,300 +105,200 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
     disk_free = shutil.disk_usage(os.path.dirname(output_file)).free / (1024 ** 2)
     logging.debug(f"Starting memory usage: {mem_percent:.1f}%, Disk free: {disk_free:.2f} MB")
 
-    # Ensure output directory exists
     output_dir = os.path.dirname(output_file)
     if not os.path.exists(output_dir):
-        try:
-            os.makedirs(output_dir, exist_ok=True)
-            logging.debug(f"Created output directory: {output_dir}")
-        except OSError as e:
-            logging.error(f"Failed to create output directory {output_dir}: {str(e)}")
-            raise
+        os.makedirs(output_dir, exist_ok=True)
 
-    with fiona.open(tabblock_json_file, 'r') as src:
-        tabblock_geojson = {'type': 'FeatureCollection', 'features': list(src)}
-    expected_features = len(tabblock_geojson['features'])
-    logging.debug(f"Expected features to process: {expected_features}")
-
-    chunk_size = 100000
-    chunk_num = 0
-    features_written_in_chunk = 0
-    written_features = 0
     temp_file = f"{output_file}.tmp"
-    header = {"type": "FeatureCollection", "features": []}
-
-    tech_types = [abbr for abbr, _ in TECH_ABBR_MAPPING.values()]
-
-    f = None
     try:
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            # Write the opening of the FeatureCollection
+        with fiona.open(tabblock_json_file, 'r') as src:
+            expected_features = len(src)
+            logging.debug(f"Expected features to process: {expected_features}")
+            tabblock_geojson = {'type': 'FeatureCollection', 'features': list(src)}
+
+        chunk_size = 50000
+        chunk_num = 0
+        features_written_in_chunk = 0
+        written_features = 0
+        tech_types = [abbr for abbr, _ in TECH_ABBR_MAPPING.values()]  # e.g., ["Copper", "Cable", "Fiber", "GeoSat", "NGeoSt", "UnlFWA", "LicFWA", "LBRFWA", "Other"]
+
+        chunk_dir = os.path.join(os.path.dirname(output_file), "chunks")
+        if not os.path.exists(chunk_dir):
+            os.makedirs(chunk_dir, exist_ok=True)
+        for old_chunk in glob.glob(os.path.join(chunk_dir, "*.chunk*.tmp")):
+            os.remove(old_chunk)
+
+        current_chunk_file = os.path.join(chunk_dir, f"{os.path.basename(output_file)}.chunk{chunk_num}.tmp")
+        with open(current_chunk_file, 'w', encoding='utf-8') as f:
             f.write('{"type":"FeatureCollection","features":[')
-            first = True
+            first_in_file = True
 
             for i, feature in enumerate(tabblock_geojson['features']):
-                if not first:
-                    f.write(',')
-                else:
-                    first = False
-                geoid20 = feature['properties']['block_geoid']
-                bdc_props = bdc_properties.get(geoid20, {})
-                if i == 0 or geoid20 == "440070104002010":
-                    logging.debug(f"BDC props for {geoid20} at index {i}: {json.dumps(bdc_props, indent=2)}")
-
-                # Convert feature to a plain dict
-                updated_feature = {
-                    "type": feature.type,
-                    "id": feature["id"],
-                    "properties": deepcopy(dict(feature["properties"])),
-                    "geometry": shape(feature["geometry"]).__geo_interface__
-                }
-
-                location_scores = {}
-                for tech_type in tech_types:
-                    tech_data = bdc_props.get(tech_type, {})
-                    if tech_data and isinstance(tech_data, dict):
-                        for brand_name, brand_data in tech_data.items():
-                            for category in ["R", "B", "X"]:
-                                for record in brand_data.get(category, []):
-                                    locations = record["Locations"].split(",")
-                                    max_dl = float(record["max_Adv_DL_speed"])
-                                    max_ul = float(record["max_Adv_UL_speed"])
-                                    low_latency = record["low_latency"] == "1"
-                                    for loc_id in locations:
-                                        if loc_id not in location_scores:
-                                            location_scores[loc_id] = {"category": category, "scores": []}
-                                        score = 2 if max_dl >= 100 and max_ul >= 20 and low_latency else 1 if max_dl >= 25 and max_ul >= 3 and low_latency else 0
-                                        location_scores[loc_id]["scores"].append(score)
-                    elif tech_data:
-                        logging.warning(f"Invalid tech_data for {geoid20}.{tech_type}: {tech_data} (type: {type(tech_data)})")
-
-                stats = {
-                    "Total BSLs": len(location_scores),
-                    "Total Residential BLSs": len({lid for lid, data in location_scores.items() if data['category'] in ["R", "X"]}),
-                    "R": {"2": [], "1": [], "0": [], "Served": 0, "Underserved": 0},
-                    "B": {"2": [], "1": [], "0": [], "Served": 0, "Underserved": 0},
-                    "X": {"2": [], "1": [], "0": [], "Served": 0, "Underserved": 0}
-                }
-
-                for loc_id, data in location_scores.items():
-                    best_score = max(data["scores"])
-                    category = data["category"]
-                    stats[category][str(best_score)].append(loc_id)
-                    if best_score == 2:
-                        stats[category]["Served"] += 1
-                    elif best_score == 1:
-                        stats[category]["Underserved"] += 1
-
-                total_served = sum(stats[br_code]["Served"] for br_code in ["R", "B", "X"])
-                total_underserved = sum(stats[br_code]["Underserved"] for br_code in ["R", "B", "X"])
-
-                techs = {
-                    "Copper": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []],
-                    "Cable": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []],
-                    "Fiber": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []],
-                    "FWA": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []],
-                    "SAT": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []],
-                    "Other": [[], [], [], 0, 0, 0, 0, None, None, None, 0, []]
-                }
-
-                all_location_ids = set()
-
-                for tech_type in tech_types:
-                    tech_data = bdc_props.get(tech_type, {})
-                    if tech_data and isinstance(tech_data, dict):
-                        tech_key = "FWA" if tech_type in ["UnlFWA", "LicFWA", "LBRFWA"] else "SAT" if tech_type in ["GeoSat", "NGeoSt"] else tech_type
-                        for brand_name, brand_data in tech_data.items():
-                            techs[tech_key][0].append(brand_name)
-                            techs[tech_key][1].append(brand_data["provider_id"])
-                            techs[tech_key][2].append(brand_data["Holding_Company"])
-                            techs[tech_key][3] += 1
-                            loc_count = brand_data.get("Location_Count", 0)
-                            techs[tech_key][4] += loc_count
-                            served = sum(1 for cat in ["R", "B", "X"] for rec in brand_data.get(cat, []) for loc in rec["Locations"].split(",") if loc in stats[cat]["2"])
-                            underserved = sum(1 for cat in ["R", "B", "X"] for rec in brand_data.get(cat, []) for loc in rec["Locations"].split(",") if loc in stats[cat]["1"])
-                            techs[tech_key][5] += served
-                            techs[tech_key][6] += underserved
-                            if loc_count > techs[tech_key][10]:
-                                techs[tech_key][7] = brand_name
-                                techs[tech_key][8] = brand_data["provider_id"]
-                                techs[tech_key][9] = brand_data["Holding_Company"]
-                                techs[tech_key][10] = loc_count
-                            for cat in ["R", "B", "X"]:
-                                for rec in brand_data.get(cat, []):
-                                    loc_ids = rec["Locations"].split(",")
-                                    techs[tech_key][11].extend(loc_ids)
-                                    all_location_ids.update(loc_ids)
-                    elif tech_data:
-                        logging.warning(f"Invalid tech_data for {geoid20}.{tech_type} in techs: {tech_data} (type: {type(tech_data)})")
-
-                for tech_key in techs:
-                    techs[tech_key][11] = sorted(list(set(techs[tech_key][11])))
-
-                if "NAME20" in updated_feature["properties"]:
-                    del updated_feature["properties"]["NAME20"]
-                
-                updated_feature['properties'].update({
-                    "Copper": bdc_props.get("Copper") if bdc_props.get("Copper") else None,
-                    "Cable": bdc_props.get("Cable") if bdc_props.get("Cable") else None,
-                    "Fiber": bdc_props.get("Fiber") if bdc_props.get("Fiber") else None,
-                    "GeoSat": bdc_props.get("GeoSat") if bdc_props.get("GeoSat") else None,
-                    "NGeoSt": bdc_props.get("NGeoSt") if bdc_props.get("NGeoSt") else None,
-                    "UnlFWA": bdc_props.get("UnlFWA") if bdc_props.get("UnlFWA") else None,
-                    "LicFWA": bdc_props.get("LicFWA") if bdc_props.get("LicFWA") else None,
-                    "LBRFWA": bdc_props.get("LBRFWA") if bdc_props.get("LBRFWA") else None,
-                    "Other": bdc_props.get("Other") if bdc_props.get("Other") else None,
-                    "stats": stats,
-                    "TotalServed": total_served,
-                    "TotalUnderserved": total_underserved,
-                    "TotalUnserved": max(feature['properties']['HOUSING20'] - total_served - total_underserved, 0)
-                })
-
-                for tech_key in techs:
-                    prefix = tech_key
-                    updated_feature['properties'][f"{prefix}_BrandNames"] = ",".join(techs[tech_key][0]) if techs[tech_key][0] else ""
-                    updated_feature['properties'][f"{prefix}_providerIDs"] = ",".join(techs[tech_key][1]) if techs[tech_key][1] else ""
-                    updated_feature['properties'][f"{prefix}_HoldingCompanies"] = ",".join(techs[tech_key][2]) if techs[tech_key][2] else ""
-                    updated_feature['properties'][f"{prefix}_providerCount"] = techs[tech_key][3]
-                    updated_feature['properties'][f"{prefix}_LocationCount"] = techs[tech_key][4]
-                    updated_feature['properties'][f"{prefix}_ServedCount"] = techs[tech_key][5]
-                    updated_feature['properties'][f"{prefix}_UnderservedCount"] = techs[tech_key][6]
-                    updated_feature['properties'][f"{prefix}_Dom_BrandName"] = techs[tech_key][7]
-                    updated_feature['properties'][f"{prefix}_Dom_ProviderID"] = techs[tech_key][8]
-                    updated_feature['properties'][f"{prefix}_Dom_Holding_Company"] = techs[tech_key][9]
-                    updated_feature['properties'][f"{prefix}_Dom_LocationCount"] = techs[tech_key][10]
-                    updated_feature['properties'][f"{prefix}_LocationIDs"] = ",".join(techs[tech_key][11]) if techs[tech_key][11] else ""
-
-                updated_feature['properties']["Total_LocationCount"] = len(all_location_ids)
-
-                if geoid20 == "440070104002010":
-                    logging.debug(f"Final feature before write for {geoid20}: {json.dumps(updated_feature, indent=2)}")
-
-                try:
-                    shape(updated_feature['geometry'])
-                    feature_str = json.dumps(updated_feature, ensure_ascii=False, indent=None)
-                    json.loads(feature_str)
-                    if not all(k in ['type', 'id', 'properties', 'geometry'] for k in updated_feature) or 'type' not in updated_feature['geometry']:
-                        raise ValueError("Invalid GeoJSON structure")
-                    if i % 100000 == 0:
-                        logging.debug(f"Feature {i} (geoid {geoid20}) validated: {feature_str[:200]}...")
-                except Exception as e:
-                    logging.error(f"Invalid feature {geoid20} at index {i}: {str(e)} - Skipping")
-                    logging.debug(f"Problematic feature (raw): {updated_feature}")
-                    continue
-                
-                try:
-                    f.write(feature_str)
-                    f.flush()
-                    written_features += 1
-                    features_written_in_chunk += 1
-                    if i % 100000 == 0:
-                        logging.debug(f"Feature {i} (geoid {geoid20}) written: {feature_str[:200]}...")
-                except IOError as e:
-                    logging.error(f"Failed to write feature {geoid20} at index {i}: {str(e)}")
-                    raise
-
-                if i % 10000 == 0:
-                    mem_percent = psutil.virtual_memory().percent
-                    logging.debug(f"Processed {i} features; Memory: {mem_percent:.1f}%")
-                
                 if features_written_in_chunk >= chunk_size and i < expected_features - 1:
-                    f.write(']')
-                    f.flush()
+                    f.write(']}')
                     f.close()
                     chunk_num += 1
-                    temp_chunk_file = f"{output_file}.chunk{chunk_num}.tmp"
-                    try:
-                        os.rename(temp_file, temp_chunk_file)
-                        logging.debug(f"Chunk {chunk_num} written to {temp_chunk_file} with {features_written_in_chunk} features")
-                    except OSError as e:
-                        logging.error(f"Failed to rename {temp_file} to {temp_chunk_file}: {str(e)}")
-                        raise
-                    temp_file = f"{output_file}.tmp"
-                    f = open(temp_file, 'w', encoding='utf-8')
-                    f.write('{"type":"FeatureCollection","features":[')
                     features_written_in_chunk = 0
-                    first = True
+                    first_in_file = True
+                    current_chunk_file = os.path.join(chunk_dir, f"{os.path.basename(output_file)}.chunk{chunk_num}.tmp")
+                    f = open(current_chunk_file, 'w', encoding='utf-8')
+                    f.write('{"type":"FeatureCollection","features":[')
 
-            # Close the features array and FeatureCollection
+                geoid20 = feature['properties']['block_geoid']  # This is GEOID20
+                
+                updated_feature = {
+                    "type": "Feature",
+                    "id": geoid20,  # Feature-level id is block_geoid (GEOID20)
+                    "properties": {
+                        "STATEFP20": feature["properties"].get("STATEFP20"),
+                        "COUNTYFP20": feature["properties"].get("COUNTYFP20"),
+                        "TRACTCE20": feature["properties"].get("TRACTCE20"),
+                        "BLOCKCE20": feature["properties"].get("BLOCKCE20"),
+                        "GEOID20": feature["properties"].get("GEOID20"),
+                        "GEOIDFQ20": feature["properties"].get("GEOIDFQ20"),
+                        "MTFCC20": feature["properties"].get("MTFCC20"),
+                        "UR20": feature["properties"].get("UR20"),
+                        "UACE20": feature["properties"].get("UACE20"),
+                        "FUNCSTAT20": feature["properties"].get("FUNCSTAT20"),
+                        "ALAND20": feature["properties"].get("ALAND20"),
+                        "AWATER20": feature["properties"].get("AWATER20"),
+                        "INTPTLAT20": feature["properties"].get("INTPTLAT20"),
+                        "INTPTLON20": feature["properties"].get("INTPTLON20"),
+                        "HOUSING20": feature["properties"].get("HOUSING20"),
+                        "POP20": feature["properties"].get("POP20"),
+                        "Copper": None, "Cable": None, "Fiber": None, "GeoSat": None,
+                        "NGeoSt": None, "UnlFWA": None, "LicFWA": None, "LBRFWA": None,
+                        "Other": None, "TotalServed": 0, "TotalUnderserved": 0, "TotalUnserved": 0,
+                        "stats": None
+                    },
+                    "geometry": feature["geometry"] if "geometry" in feature else {"type": "Point", "coordinates": [0, 0]}
+                }
+
+                if geoid20 in bdc_properties:
+                    for key, value in bdc_properties[geoid20].items():
+                        if key in updated_feature["properties"]:
+                            updated_feature["properties"][key] = value
+
+                # Initialize all technology-specific fields
+                for tech in tech_types:
+                    updated_feature["properties"].update({
+                        f"{tech}_BrandNames": "",
+                        f"{tech}_providerIDs": "",
+                        f"{tech}_HoldingCompanies": "",
+                        f"{tech}_providerCount": 0,
+                        f"{tech}_LocationCount": 0,
+                        f"{tech}_ServedCount": 0,
+                        f"{tech}_UnderservedCount": 0,
+                        f"{tech}_Dom_BrandName": None,
+                        f"{tech}_Dom_ProviderID": None,
+                        f"{tech}_Dom_Holding_Company": None,
+                        f"{tech}_Dom_LocationCount": 0,
+                        f"{tech}_LocationIDs": ""
+                    })
+
+                # Use precomputed values from bdc_properties
+                if geoid20 in bdc_properties:
+                    for tech in tech_types:
+                        if f"{tech}_LocationCount" in bdc_properties[geoid20]:
+                            updated_feature["properties"][f"{tech}_LocationCount"] = bdc_properties[geoid20][f"{tech}_LocationCount"]
+                        if f"{tech}_ServedCount" in bdc_properties[geoid20]:
+                            updated_feature["properties"][f"{tech}_ServedCount"] = bdc_properties[geoid20][f"{tech}_ServedCount"]
+                        if f"{tech}_UnderservedCount" in bdc_properties[geoid20]:
+                            updated_feature["properties"][f"{tech}_UnderservedCount"] = bdc_properties[geoid20][f"{tech}_UnderservedCount"]
+                        if f"{tech}_LocationIDs" in bdc_properties[geoid20]:
+                            updated_feature["properties"][f"{tech}_LocationIDs"] = bdc_properties[geoid20][f"{tech}_LocationIDs"]
+
+                # Add detailed technology summaries (without recalculating counts)
+                for tech in tech_types:
+                    tech_data = updated_feature["properties"].get(tech)
+                    if tech_data and isinstance(tech_data, dict) and tech_data:
+                        brand_names = []
+                        provider_ids = []
+                        holding_companies = []
+                        location_counts = []
+
+                        for brand_name, provider_data in tech_data.items():
+                            brand_names.append(brand_name)
+                            provider_ids.append(provider_data["provider_id"])
+                            holding_companies.append(provider_data["Holding_Company"])
+                            loc_count = provider_data.get("Location_Count", 0)
+                            location_counts.append(loc_count)
+
+                        if location_counts:
+                            dom_idx = location_counts.index(max(location_counts))
+                            dom_brand = brand_names[dom_idx]
+                            dom_pid = provider_ids[dom_idx]
+                            dom_hc = holding_companies[dom_idx]
+                            dom_loc_count = location_counts[dom_idx]
+                        else:
+                            dom_brand = None
+                            dom_pid = None
+                            dom_hc = None
+                            dom_loc_count = 0
+
+                        updated_feature["properties"].update({
+                            f"{tech}_BrandNames": ",".join(brand_names),
+                            f"{tech}_providerIDs": ",".join(provider_ids),
+                            f"{tech}_HoldingCompanies": ",".join(holding_companies),
+                            f"{tech}_providerCount": len(brand_names),
+                            f"{tech}_Dom_BrandName": dom_brand,
+                            f"{tech}_Dom_ProviderID": dom_pid,
+                            f"{tech}_Dom_Holding_Company": dom_hc,
+                            f"{tech}_Dom_LocationCount": dom_loc_count,
+                        })
+
+                # Calculate Total_LocationCount safely
+                all_location_ids = set()
+                for tech in tech_types:
+                    loc_ids = updated_feature["properties"].get(f"{tech}_LocationIDs", "")
+                    if loc_ids:
+                        all_location_ids.update(loc_ids.split(","))
+                updated_feature["properties"]["Total_LocationCount"] = len(all_location_ids)
+
+                if not first_in_file:
+                    f.write(',')
+                else:
+                    first_in_file = False
+                
+                json.dump(updated_feature, f, ensure_ascii=False, default=decimal_to_json_serializable)
+                features_written_in_chunk += 1
+                written_features += 1
+
+                if i % 10000 == 0:
+                    logging.debug(f"Processed {i} features; Memory: {psutil.virtual_memory().percent:.1f}%")
+
             f.write(']}')
-            logging.debug(f"GeoJSON footer written—features array closed")
             f.close()
 
             if chunk_num > 0:
-                final_temp = output_file + '.final.tmp'
+                logging.info(f"Merging {chunk_num + 1} chunks into final output")
+                final_temp = f"{output_file}.final.tmp"
                 with open(final_temp, 'w', encoding='utf-8') as f_final:
                     f_final.write('{"type":"FeatureCollection","features":[')
-                    first_feature = True
+                    any_features = False
                     for c in range(chunk_num + 1):
-                        chunk_file = f"{output_file}.chunk{c}.tmp" if c > 0 else temp_file
-                        with open(chunk_file, 'r') as f_chunk:
-                            chunk_text = f_chunk.read()
-                            start = chunk_text.find('[') + 1
-                            end = chunk_text.rfind(']')
-                            features_text = chunk_text[start:end].strip()
-                            if features_text:
-                                if not first_feature:
+                        chunk_file = os.path.join(chunk_dir, f"{os.path.basename(output_file)}.chunk{c}.tmp")
+                        with open(chunk_file, 'r', encoding='utf-8') as chunk_f:
+                            chunk_data = json.load(chunk_f)
+                            for feat in chunk_data.get('features', []):
+                                if any_features:
                                     f_final.write(',')
-                                f_final.write(features_text)
-                                first_feature = False
-                        os.remove(chunk_file)
+                                json.dump(feat, f_final, ensure_ascii=False, default=decimal_to_json_serializable)
+                                any_features = True
                     f_final.write(']}')
-                if os.path.exists(output_file):
-                    os.remove(output_file)
-                try:
-                    os.rename(final_temp, output_file)
-                    logging.debug(f"Combined {chunk_num + 1} chunks into {output_file}")
-                except OSError as e:
-                    logging.error(f"Failed to rename {final_temp} to {output_file}: {str(e)}")
-                    raise
+                os.rename(final_temp, output_file)
             else:
-                if os.path.exists(output_file):
-                    os.remove(output_file)
-                try:
-                    os.rename(temp_file, output_file)
-                    logging.debug(f"Renamed single chunk file to {output_file}")
-                except OSError as e:
-                    logging.error(f"Failed to rename {temp_file} to {output_file}: {str(e)}")
-                    raise
-
-            @retry()
-            def validate_geojson(output_file):
-                with Env(OGR_GEOJSON_MAX_OBJ_SIZE=0):
-                    with fiona.open(output_file, 'r') as src:
-                        actual_features = len(list(src))
-                        logging.debug(f"Validated {actual_features} features in {output_file}")
-                if actual_features != written_features:
-                    logging.warning(f"GeoJSON feature count mismatch: Written {written_features}, Found {actual_features}")
-                logging.info(f"GeoJSON {output_file} validated with Fiona: {actual_features} features")
-
-            try:
-                validate_geojson(output_file)
-            except Exception as e:
-                logging.error(f"GeoJSON validation failed: {str(e)}")
-                raise
+                os.rename(current_chunk_file, output_file)
 
     except Exception as e:
-        logging.error(f"Error during streaming merge at feature {written_features}: {str(e)}")
-        if f and not f.closed:
-            f.close()
-        if os.path.exists(temp_file):
-            logging.warning(f"Preserving temporary file {temp_file} for debugging")
+        logging.error(f"Error during streaming merge: {str(e)}")
         raise
+
     finally:
-        if f and not f.closed:
-            f.close()
-        if os.path.exists(temp_file) and not os.path.exists(output_file):
-            logging.warning(f"Temporary file {temp_file} exists but final file {output_file} missing—write failed")
+        for chunk_file in glob.glob(os.path.join(chunk_dir, "*.tmp")):
+            os.remove(chunk_file)
+        if os.path.exists(chunk_dir) and not os.listdir(chunk_dir):
+            os.rmdir(chunk_dir)
 
-    try:
-        file_size = os.path.getsize(output_file) / (1024 ** 2)
-        logging.debug(f"Wrote {written_features} features; File size: {file_size:.2f} MB")
-    except FileNotFoundError:
-        logging.error(f"Output file {output_file} not found after processing")
-        raise
-
-    if written_features != expected_features:
-        logging.warning(f"Feature count mismatch: Expected {expected_features}, Wrote {written_features}")
-    
     logging.info(f"Streamed merged GeoJSON to: {output_file}")
+    return output_file
