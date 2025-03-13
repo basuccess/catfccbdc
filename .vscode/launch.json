@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--base-dir", "/Volumes/T7 Shield/SharedData",
-                "--state", "CA",
+                "--state", "RI",
                 "--log-file",
                 "--log-level", "DEBUG"
             ]
