@@ -8,6 +8,54 @@ import argparse
 import psutil
 import gc
 from constant import STATES_AND_TERRITORIES
+import shutil
+import time
+from functools import wraps
+
+def retry_io(max_attempts=5, delay=2):
+    """Retry decorator for I/O operations."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except (IOError, OSError) as e:
+                    attempts += 1
+                    if attempts == max_attempts:
+                        logging.error(f"Failed {func.__name__} after {max_attempts} attempts: {e}")
+                        raise
+                    logging.warning(f"Retry {attempts}/{max_attempts} for {func.__name__}: {e}")
+                    time.sleep(delay)
+        return wrapper
+    return decorator
+
+def check_disk_space(path, min_mb=100):
+    """Ensure sufficient disk space before writing."""
+    free_mb = shutil.disk_usage(os.path.dirname(path)).free / (1024 ** 2)
+    if free_mb < min_mb:
+        raise OSError(f"Insufficient disk space: {free_mb:.2f} MB available, {min_mb} MB required")
+
+def track_corruption_stats():
+    """Global stats tracker for corruption handling."""
+    return {
+        "chunks_errored": 0,
+        "chunks_backed_up": 0,
+        "subchunks_processed": 0,
+        "subchunks_errored": 0,
+        "features_attempted": 0,
+        "features_fixed": 0,
+        "features_failed": 0
+    }
+
+corruption_stats = track_corruption_stats()
+
+def report_corruption_stats():
+    """Log a summary report of corruption handling."""
+    logging.info("=== Corruption Handling Summary ===")
+    for key, value in corruption_stats.items():
+        logging.info(f"{key.replace('_', ' ').title()}: {value}")
 
 def setup_logging(log_file, base_dir, log_level, log_parts):
     log_format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s'  # Added %(funcName)s
