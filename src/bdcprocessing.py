@@ -283,7 +283,11 @@ def merge_chunk_summaries(chunk_files):
     else:
         logging.debug("merge_chunk_summaries: Block 440070104002010 not found in combined_summary")
     
-    logging.debug(f"merge_chunk_summaries: Merged summary sample: {json.dumps(next(iter(combined_summary.values())), indent=2)}")
+    if combined_summary:
+        logging.debug(f"merge_chunk_summaries: Merged summary sample: {json.dumps(next(iter(combined_summary.values())), indent=2)}")
+    else:
+        logging.debug("merge_chunk_summaries: No data to merge (empty summary).")
+    
     return {"type": "FeatureCollection", "features": [{"id": k, "properties": v["properties"]} for k, v in combined_summary.items()]}
 
 def process_bdc_files(base_dir, state_dir):
@@ -293,6 +297,10 @@ def process_bdc_files(base_dir, state_dir):
     bdc_files = [os.path.join(state_dir, f) for f in os.listdir(state_dir) if re.match(BDC_FILE_PATTERN, f)]
     log_memory_usage("After listing BDC files")
     monitor_memory()
+
+    if not bdc_files:
+        logging.warning(f"No BDC files found in directory: {state_dir}. Skipping processing for this state.")
+        return {"type": "FeatureCollection", "features": []}
     
     for idx, file in enumerate(bdc_files):
         logging.debug(f"BDC files to process: {idx} = '{file}'")
@@ -318,6 +326,10 @@ def calculate_service_statistics(feature_collection):
     monitor_memory()
     
     features = feature_collection["features"]
+    if not features:
+        logging.debug("No features to process in feature_collection. Returning unchanged.")
+        return feature_collection
+    
     valid_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values() if v[1]]  # True-flagged techs for scoring
     all_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values()]  # All techs for total location count
     
@@ -443,5 +455,8 @@ def calculate_service_statistics(feature_collection):
                           f"GeoSat_LocationCount={properties.get('GeoSat_LocationCount')}, "
                           f"LicFWA_LocationIDs={properties.get('LicFWA_LocationIDs')}")
     
-    logging.debug(f"Service statistics output: {json.dumps(feature_collection['features'][0], indent=2, default=decimal_to_json_serializable)}")
+    if features:
+        logging.debug(f"Service statistics output: {json.dumps(feature_collection['features'][0], indent=2, default=decimal_to_json_serializable)}")
+    else:
+        logging.debug("Service statistics output: No features processed.")
     return feature_collection

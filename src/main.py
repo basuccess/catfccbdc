@@ -11,7 +11,7 @@ import ijson
 from decimal import Decimal
 from constant import TECH_ABBR_MAPPING
 from functions import setup_logging, parse_arguments, expand_state_ranges, retry_io, check_disk_space, track_corruption_stats, report_corruption_stats
-from prep import check_required_directories, get_state_info
+from prep import check_required_directories, get_state_info, check_required_files
 from bdcprocessing import process_bdc_files, calculate_service_statistics
 from tabblockmerge import process_tabblock_data, stream_merge_bdc_stats
 
@@ -211,7 +211,17 @@ def main():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         for state_abbr in states_to_process:
-            state_input_bdc_dir, state_input_tabblock_dir = check_required_directories(base_dir, state_abbr)
+            try:
+                state_input_bdc_dir, state_input_tabblock_dir = check_required_directories(base_dir, state_abbr)
+                bdc_files, tabblock_files = check_required_files(base_dir, state_abbr)
+                logging.info(f"Found {len(bdc_files)} BDC files and {len(tabblock_files)} Tabblock files for state: {state_abbr}")
+                if not bdc_files and not tabblock_files:
+                    logging.warning(f"No BDC or Tabblock files found for state {state_abbr}. Skipping.")
+                    continue
+            except FileNotFoundError as e:
+                logging.warning(f"Skipping state {state_abbr} due to missing files: {str(e)}")
+                continue
+
             state_output_dir = state_input_bdc_dir
             if args.output_dir and os.path.isdir(os.path.dirname(args.output_dir)):
                 state_output_dir = os.path.join(args.output_dir, f"{get_state_info(state_abbr)[0]}_{state_abbr}_{get_state_info(state_abbr)[2]}")
