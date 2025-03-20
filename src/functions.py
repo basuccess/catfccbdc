@@ -9,6 +9,7 @@ import psutil
 import gc
 from constant import STATES_AND_TERRITORIES
 import shutil
+from datetime import datetime
 import time
 from functools import wraps
 
@@ -38,7 +39,7 @@ def check_disk_space(path, min_mb=100):
         raise OSError(f"Insufficient disk space: {free_mb:.2f} MB available, {min_mb} MB required")
 
 def track_corruption_stats():
-    """Global stats tracker for corruption handling."""
+    """Initialize corruption stats dictionary."""
     return {
         "chunks_errored": 0,
         "chunks_backed_up": 0,
@@ -49,13 +50,21 @@ def track_corruption_stats():
         "features_failed": 0
     }
 
-corruption_stats = track_corruption_stats()
-
-def report_corruption_stats():
-    """Log a summary report of corruption handling."""
-    logging.info("=== Corruption Handling Summary ===")
-    for key, value in corruption_stats.items():
-        logging.info(f"{key.replace('_', ' ').title()}: {value}")
+def report_corruption_stats(corruption_history_dir, corruption_stats):
+    """Report corruption handling statistics."""
+    stats = f"=== Corruption Handling Summary ===\n" \
+            f"Timestamp: {datetime.now().isoformat()}\n" \
+            f"Chunks Errored: {corruption_stats['chunks_errored']}\n" \
+            f"Chunks Backed Up: {corruption_stats['chunks_backed_up']}\n" \
+            f"Subchunks Processed: {corruption_stats['subchunks_processed']}\n" \
+            f"Subchunks Errored: {corruption_stats['subchunks_errored']}\n" \
+            f"Features Attempted: {corruption_stats['features_attempted']}\n" \
+            f"Features Fixed: {corruption_stats['features_fixed']}\n" \
+            f"Features Failed: {corruption_stats['features_failed']}\n"
+    logging.info(stats)
+    corruption_history_logfile = os.path.join(corruption_history_dir, "corruption_history.log")
+    with open(corruption_history_logfile, "a") as f:
+        f.write(stats + "\n")
 
 def setup_logging(log_file, base_dir, log_level, log_parts):
     log_format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s'  # Added %(funcName)s

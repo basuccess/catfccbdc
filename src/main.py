@@ -363,7 +363,7 @@ def main():
             logging.info(f"Memory cleared after processing state: {state_abbr}")
 
         # Report corruption stats after all states are processed
-        report_corruption_stats()
+        report_corruption_stats(state_output_dir, corruption_stats)
 
 if __name__ == '__main__':
     main()

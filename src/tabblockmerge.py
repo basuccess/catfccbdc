@@ -14,6 +14,7 @@ from copy import deepcopy
 from shapely.geometry import shape, mapping
 from functools import wraps
 import time
+from datetime import datetime
 from constant import TECH_ABBR_MAPPING, SERVED_DL_SPEED, SERVED_UL_SPEED, LOW_LATENCY, UNDERSERVED_DL_SPEED, UNDERSERVED_UL_SPEED
 from prep import check_required_files, get_state_info
 from functions import retry_io, check_disk_space, track_corruption_stats, report_corruption_stats
@@ -166,8 +167,13 @@ def process_tabblock_data(base_dir, state_abbr, temp_dir):
 
 @retry(max_attempts=5, delay=3)
 def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
-    """Stream merge BDC statistics with Tabblock20 data, with enhanced error handling."""
-    global corruption_stats
+    global corruption_stats  # Use the global corruption_stats
+
+    # Check for existing backups
+    existing_backups = [f for f in os.listdir(os.path.dirname(output_file)) if f.endswith('.tmp.backup')]
+    if existing_backups:
+        logging.warning(f"Found existing backup files: {existing_backups}. These may indicate a previous failed run.")
+
     logging.info("Streaming merge of BDC statistics with Tabblock20 data")
     mem_percent = psutil.virtual_memory().percent
     disk_free = shutil.disk_usage(os.path.dirname(output_file)).free / (1024 ** 2)
@@ -283,6 +289,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
     def process_subchunk(subchunk_content, subchunk_file, error_dir, f_final, any_features_ref):
         """Process a sub-chunk feature-by-feature with repair attempts."""
         features = extract_features(subchunk_content)
+        logging.info(f"Processing subchunk with {len(features)} features feature-by-feature")
         with open(subchunk_file, 'w', encoding='utf-8') as f:
             f.write('{"type":"FeatureCollection","features":[')
             first = True
@@ -358,7 +365,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                 f = open(current_chunk_file, 'w', encoding='utf-8')
                 f.write('{"type":"FeatureCollection","features":[')
 
-            updated_feature = process_feature(feature, bdc_properties, tech_types)
+            updated_feature = process_feature(feature, bdc_properties , tech_types)
             if not first_in_file:
                 f.write(',')
             json.dump(sanitize_feature(updated_feature), f, ensure_ascii=False, default=decimal_to_json_serializable)
@@ -401,6 +408,7 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
                             # Subdivide into 10+ sub-chunks
                             features = extract_features(chunk_content)
                             subchunk_size = max(1, len(features) // 10)
+                            logging.info(f"Subdividing chunk {c} into subchunks of size {subchunk_size}")
                             for sub_idx in range(0, len(features), subchunk_size):
                                 subchunk_features = features[sub_idx:sub_idx + subchunk_size]
                                 subchunk_content = f'{{"type":"FeatureCollection","features":[{",".join(subchunk_features)}]}}'
@@ -437,5 +445,9 @@ def stream_merge_bdc_stats(tabblock_json_file, bdc_properties, output_file):
         os.rmdir(error_dir)
 
     logging.info(f"Streamed merged GeoJSON to: {output_file}")
-    report_corruption_stats()
+    # Cleanup backups on success
+    for backup_file in glob.glob(f"{output_file}.chunk*.tmp.backup"):
+        os.remove(backup_file)
+        logging.debug(f"Removed old backup file: {backup_file}")
+    report_corruption_stats(output_dir, corruption_stats)
     return output_file
