@@ -1,0 +1,60 @@
+File: tl_01_tabblock20.shp, 01_AL_BB.gpkg; Size: 218.68 MB, 1.01 GB; Feature Types: Polygon: 185974, MultiPolygon: 2, MultiPolygon: 185976
+File: tl_02_tabblock20.shp, 02_AK_BB.gpkg; Size: 120.91 MB, 205.65 MB; Feature Types: Polygon: 28474, MultiPolygon: 94, MultiPolygon: 28568
+File: tl_04_tabblock20.shp, 04_AZ_BB.gpkg; Size: 173.44 MB, 1.13 GB; Feature Types: Polygon: 155444, Polygon: 155444
+File: tl_05_tabblock20.shp, 05_AR_BB.gpkg; Size: 194.58 MB, 763.50 MB; Feature Types: Polygon: 136422, Polygon: 136422
+File: tl_06_tabblock20.shp, 06_CA_BB.gpkg; Size: 552.08 MB, 3.55 GB; Feature Types: Polygon: 519666, MultiPolygon: 57, MultiPolygon: 494723
+File: tl_08_tabblock20.shp, 08_CO_BB.gpkg; Size: 189.10 MB, 969.61 MB; Feature Types: Polygon: 140345, Polygon: 140345
+File: tl_09_tabblock20.shp, 09_CT_BB.gpkg; Size: 51.62 MB, 375.84 MB; Feature Types: Polygon: 49922, MultiPolygon: 4, MultiPolygon: 49926
+File: tl_10_tabblock20.shp, 10_DE_BB.gpkg; Size: 17.62 MB, 131.17 MB; Feature Types: Polygon: 20197, MultiPolygon: 1, MultiPolygon: 20198
+File: tl_11_tabblock20.shp, 11_DC_BB.gpkg; Size: 3.58 MB, 41.93 MB; Feature Types: Polygon: 6012, Polygon: 6012
+File: tl_12_tabblock20.shp, 12_FL_BB.gpkg; Size: 283.72 MB, 2.38 GB; Feature Types: Polygon: 390015, MultiPolygon: 51, MultiPolygon: 390066
+File: tl_13_tabblock20.shp, 13_GA_BB.gpkg; Size: 249.70 MB, 1.43 GB; Feature Types: Polygon: 232707, MultiPolygon: 10, MultiPolygon: 232717
+File: tl_15_tabblock20.shp, 15_HI_BB.gpkg; Size: 20.84 MB, 102.00 MB; Feature Types: Polygon: 14712, MultiPolygon: 20, MultiPolygon: 14732
+File: tl_16_tabblock20.shp, 16_ID_BB.gpkg; Size: 175.10 MB, 539.67 MB; Feature Types: Polygon: 81879, Polygon: 81879
+File: tl_17_tabblock20.shp, 17_IL_BB.gpkg; Size: 241.47 MB, 2.06 GB; Feature Types: Polygon: 369977, MultiPolygon: 1, MultiPolygon: 369978
+File: tl_18_tabblock20.shp, 18_IN_BB.gpkg; Size: 160.99 MB, 1.24 GB; Feature Types: Polygon: 204568, Polygon: 204568
+File: tl_19_tabblock20.shp, 19_IA_BB.gpkg; Size: 133.31 MB, 988.22 MB; Feature Types: Polygon: 175199, Polygon: 175199
+File: tl_20_tabblock20.shp, 20_KS_BB.gpkg; Size: 131.63 MB, 864.57 MB; Feature Types: Polygon: 172529, Polygon: 172529
+File: tl_21_tabblock20.shp, 21_KY_BB.gpkg; Size: 234.88 MB, 879.29 MB; Feature Types: Polygon: 132658, MultiPolygon: 4, MultiPolygon: 132662
+File: tl_22_tabblock20.shp, 22_LA_BB.gpkg; Size: 168.40 MB, 815.80 MB; Feature Types: Polygon: 142815, MultiPolygon: 59, MultiPolygon: 142874
+File: tl_23_tabblock20.shp, 23_ME_BB.gpkg; Size: 101.02 MB, 334.83 MB; Feature Types: Polygon: 47061, MultiPolygon: 77, MultiPolygon: 47138
+File: tl_24_tabblock20.shp, 24_MD_BB.gpkg; Size: 93.07 MB, 610.59 MB; Feature Types: Polygon: 83788, MultiPolygon: 39, MultiPolygon: 83827
+File: tl_25_tabblock20.shp, 25_MA_BB.gpkg; Size: 87.07 MB, 658.23 MB; Feature Types: Polygon: 107265, MultiPolygon: 13, MultiPolygon: 107278
+File: tl_26_tabblock20.shp, 26_MI_BB.gpkg; Size: 179.62 MB, 1.42 GB; Feature Types: Polygon: 254673, MultiPolygon: 57, Polygon: 229678, MultiPolygon: 52, GeometryCollection: 65457
+File: tl_27_tabblock20.shp, 27_MN_BB.gpkg; Size: 225.76 MB, 1.14 GB; Feature Types: Polygon: 198701, MultiPolygon: 4, MultiPolygon: 198705
+File: tl_28_tabblock20.shp, 28_MS_BB.gpkg; Size: 177.34 MB, 655.88 MB; Feature Types: Polygon: 112240, MultiPolygon: 1, MultiPolygon: 112241
+File: tl_29_tabblock20.shp, 29_MO_BB.gpkg; Size: 293.40 MB, 1.45 GB; Feature Types: Polygon: 253632, Polygon: 253632
+File: tl_30_tabblock20.shp, 30_MT_BB.gpkg; Size: 214.30 MB, 487.31 MB; Feature Types: Polygon: 88417, Polygon: 88417
+File: tl_31_tabblock20.shp, 31_NE_BB.gpkg; Size: 76.03 MB, 621.81 MB; Feature Types: Polygon: 119103, Polygon: 119103
+File: tl_32_tabblock20.shp, 32_NV_BB.gpkg; Size: 107.73 MB, 441.38 MB; Feature Types: Polygon: 57409, Polygon: 57409
+File: tl_33_tabblock20.shp, 33_NH_BB.gpkg; Size: 38.86 MB, 216.62 MB; Feature Types: Polygon: 31947, MultiPolygon: 1, MultiPolygon: 31948
+File: tl_34_tabblock20.shp, 34_NJ_BB.gpkg; Size: 97.56 MB, 875.52 MB; Feature Types: Polygon: 137971, MultiPolygon: 1, MultiPolygon: 137972
+File: tl_35_tabblock20.shp, 35_NM_BB.gpkg; Size: 150.79 MB, 589.46 MB; Feature Types: Polygon: 107214, MultiPolygon: 1, MultiPolygon: 107215
+File: tl_36_tabblock20.shp, 36_NY_BB.gpkg; Size: 270.97 MB, 1.74 GB; Feature Types: Polygon: 288807, MultiPolygon: 12, MultiPolygon: 288819
+File: tl_37_tabblock20.shp, 37_NC_BB.gpkg; Size: 300.06 MB, 1.65 GB; Feature Types: Polygon: 236634, MultiPolygon: 4, MultiPolygon: 236638
+File: tl_38_tabblock20.shp, 38_ND_BB.gpkg; Size: 74.28 MB, 305.40 MB; Feature Types: Polygon: 84566, Polygon: 84566
+File: tl_39_tabblock20.shp, 39_OH_BB.gpkg; Size: 229.56 MB, 1.84 GB; Feature Types: Polygon: 276426, MultiPolygon: 2, MultiPolygon: 276428
+File: tl_40_tabblock20.shp, 40_OK_BB.gpkg; Size: 165.26 MB, 1.04 GB; Feature Types: Polygon: 180154, Polygon: 180154
+File: tl_41_tabblock20.shp, 41_OR_BB.gpkg; Size: 269.26 MB, 874.01 MB; Feature Types: Polygon: 130785, MultiPolygon: 22, MultiPolygon: 130807
+File: tl_42_tabblock20.shp, 42_PA_BB.gpkg; Size: 344.09 MB, 2.00 GB; Feature Types: Polygon: 336985, Polygon: 336985
+File: tl_44_tabblock20.shp, 44_RI_BB.gpkg; Size: 23.43 MB, 148.99 MB; Feature Types: Polygon: 25648, MultiPolygon: 1, MultiPolygon: 25649
+File: tl_45_tabblock20.shp, 45_SC_BB.gpkg; Size: 166.92 MB, 897.31 MB; Feature Types: Polygon: 146838, MultiPolygon: 6, MultiPolygon: 146844
+File: tl_46_tabblock20.shp, 46_SD_BB.gpkg; Size: 88.56 MB, 332.90 MB; Feature Types: Polygon: 71382, MultiPolygon: 1, MultiPolygon: 71383
+File: tl_47_tabblock20.shp, 47_TN_BB.gpkg; Size: 273.84 MB, 1.20 GB; Feature Types: Polygon: 179717, Polygon: 179717
+File: tl_48_tabblock20.shp, 48_TX_BB.gpkg; Size: 619.23 MB, 4.23 GB; Feature Types: Polygon: 668755, MultiPolygon: 2, MultiPolygon: 668757
+File: tl_49_tabblock20.shp, 49_UT_BB.gpkg; Size: 149.83 MB, 581.20 MB; Feature Types: Polygon: 71206, MultiPolygon: 1, MultiPolygon: 71207
+File: tl_50_tabblock20.shp, 50_VT_BB.gpkg; Size: 50.95 MB, 167.06 MB; Feature Types: Polygon: 24611, Polygon: 24611
+File: tl_51_tabblock20.shp, 51_VA_BB.gpkg; Size: 274.17 MB, 1.09 GB; Feature Types: Polygon: 163487, MultiPolygon: 4, MultiPolygon: 163491
+File: tl_53_tabblock20.shp, 53_WA_BB.gpkg; Size: 172.33 MB, 1.04 GB; Feature Types: Polygon: 158063, MultiPolygon: 30, MultiPolygon: 158093
+File: tl_54_tabblock20.shp, 54_WV_BB.gpkg; Size: 152.23 MB, 470.15 MB; Feature Types: Polygon: 72558, Polygon: 72558
+File: tl_55_tabblock20.shp, 55_WI_BB.gpkg; Size: 249.91 MB, 1.24 GB; Feature Types: Polygon: 203052, MultiPolygon: 7, MultiPolygon: 203059
+File: tl_56_tabblock20.shp, 56_WY_BB.gpkg; Size: 126.72 MB, 296.39 MB; Feature Types: Polygon: 53769, Polygon: 53769
+File: tl_60_tabblock20.shp, 60_AS_BB.gpkg; Size: 1.49 MB, 3.52 MB; Feature Types: Polygon: 562, MultiPolygon: 3, MultiPolygon: 565
+File: tl_64_tabblock20.shp - Missing, 64_FM_BB.gpkg - Missing; Size: N/A, N/A; Feature Types: N/A, N/A
+File: tl_66_tabblock20.shp, 66_GU_BB.gpkg; Size: 2.38 MB, 11.76 MB; Feature Types: Polygon: 1813, MultiPolygon: 3, MultiPolygon: 1816
+File: tl_68_tabblock20.shp - Missing, 68_MH_BB.gpkg - Missing; Size: N/A, N/A; Feature Types: N/A, N/A
+File: tl_69_tabblock20.shp, 69_MP_BB.gpkg; Size: 2.03 MB, 4.94 MB; Feature Types: Polygon: 858, MultiPolygon: 15, MultiPolygon: 873
+File: tl_70_tabblock20.shp - Missing, 70_PW_BB.gpkg - Missing; Size: N/A, N/A; Feature Types: N/A, N/A
+File: tl_72_tabblock20.shp, 72_PR_BB.gpkg; Size: 34.82 MB, 389.29 MB; Feature Types: Polygon: 41928, MultiPolygon: 59, MultiPolygon: 41987
+File: tl_74_tabblock20.shp - Missing, 74_UM_BB.gpkg - Missing; Size: N/A, N/A; Feature Types: N/A, N/A
+File: tl_78_tabblock20.shp, 78_VI_BB.gpkg; Size: 3.40 MB, 12.24 MB; Feature Types: Polygon: 2640, MultiPolygon: 17, MultiPolygon: 2657
