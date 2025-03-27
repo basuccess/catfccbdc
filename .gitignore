@@ -20,3 +20,7 @@ Thumbs.db
 *.swp
 *.swo
 *.sublime-workspace
+
+# featurecount.py output files
+BB_filelist.txt
+BB_filelist_gp.txt

@@ -11,6 +11,7 @@ from constant import STATES_AND_TERRITORIES
 import shutil
 import time
 from functools import wraps
+from datetime import datetime  # Added for timestamp
 
 def retry_io(max_attempts=5, delay=2):
     """Retry decorator for I/O operations."""
@@ -51,14 +52,27 @@ def track_corruption_stats():
 
 corruption_stats = track_corruption_stats()
 
-def report_corruption_stats():
-    """Log a summary report of corruption handling."""
-    logging.info("=== Corruption Handling Summary ===")
-    for key, value in corruption_stats.items():
+def report_corruption_stats(output_dir, stats):
+    """Log a summary report of corruption handling and append to corruption_history.log in output_dir."""
+    # Log to existing logging handlers (console and/or main log file)
+    logging.info(f"=== Corruption Handling Summary for {output_dir} ===")
+    for key, value in stats.items():
         logging.info(f"{key.replace('_', ' ').title()}: {value}")
+    
+    # Append to corruption_history.log in the state-specific output_dir
+    corruption_log_file = os.path.join(output_dir, "corruption_history.log")
+    try:
+        with open(corruption_log_file, 'a', encoding='utf-8') as f:  # 'a' for append mode
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            f.write(f"{timestamp} - Corruption Handling Summary for {output_dir}\n")
+            for key, value in stats.items():
+                f.write(f"{key.replace('_', ' ').title()}: {value}\n")
+            f.write("\n")  # Add a blank line between entries for readability
+    except IOError as e:
+        logging.error(f"Failed to append to {corruption_log_file}: {e}")
 
 def setup_logging(log_file, base_dir, log_level, log_parts):
-    log_format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s'  # Added %(funcName)s
+    log_format = '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(funcName)s - %(message)s'
     parts_log_level = getattr(logging, log_level.upper(), logging.INFO)
 
     handlers = [logging.StreamHandler(sys.stdout)]
@@ -69,24 +83,21 @@ def setup_logging(log_file, base_dir, log_level, log_parts):
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
             file_handler = logging.FileHandler(log_file_path, mode='w')
-            file_handler.setLevel(parts_log_level)  # Set handler level explicitly
+            file_handler.setLevel(parts_log_level)
             handlers.append(file_handler)
         except FileNotFoundError as e:
             logging.error(f"Failed to create log file directory: {e}")
             sys.exit(1)
 
-    # Remove existing handlers
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
-    # Configure root logger
     logging.basicConfig(level=parts_log_level, format=log_format, handlers=handlers, force=True)
 
     if not log_parts:
         logging.info("No specific log parts provided, using default or set logging level for all modules.")
     else:
-        # Apply log level to specified modules
-        for part in log_parts:  # log_parts is already a list from nargs='*'
+        for part in log_parts:
             logger = logging.getLogger(part.strip())
             logger.setLevel(parts_log_level)
         logging.info(f"Set logging level {log_level} for parts: {', '.join(log_parts)}")
@@ -125,7 +136,7 @@ def expand_state_ranges(state_inputs):
             start, end = state_input.split('..')
             if start in state_abbrs and end in state_abbrs:
                 start_idx = state_abbrs.index(start)
-                end_idx = state_abbrs.index(end) + 1  # Inclusive of end
+                end_idx = state_abbrs.index(end) + 1
                 expanded_states.extend(state_abbrs[start_idx:end_idx])
             else:
                 logging.warning(f"Invalid state range: {state_input}. Skipping.")

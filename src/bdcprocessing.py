@@ -118,8 +118,6 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
         low_latency = str(int(row['low_latency']))
         served_location = sanitize_string(row['location_id'])
         
-        logging.debug(f"Processing row: block_geoid={block_geoid}, tech_abbr={tech_abbr}, brand_name={brand_name}, location_id={served_location}")
-        
         if block_geoid not in summary:
             summary[block_geoid] = create_empty_feature(block_geoid)
         
@@ -156,9 +154,10 @@ def process_bdc_file_chunk(df_chunk, holder_mapping, temp_file):
                     "Location_Count": 1
                 })
     
-    with open(temp_file, 'w') as f:
-        json.dump(summary, f, default=decimal_to_json_serializable)
-    logging.debug(f"Chunk summary for {block_geoid}: {summary.get(block_geoid)}")
+    # Use json.dump with ensure_ascii=False to preserve UTF-8 and double quotes
+    with open(temp_file, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, ensure_ascii=False, default=decimal_to_json_serializable)
+    logging.debug(f"Wrote chunk to {temp_file}")
     return temp_file
 
 def process_bdc_file(file_path, holder_mapping, temp_dir):
@@ -178,7 +177,7 @@ def merge_chunk_summaries(chunk_files):
     all_tech_abbrs = [v[0] for v in TECH_ABBR_MAPPING.values()]
     
     for chunk_file in chunk_files:
-        with open(chunk_file, 'r') as f:
+        with open(chunk_file, 'r', encoding='utf-8') as f:
             summary = json.load(f)
             for block_geoid, data in summary.items():
                 if block_geoid not in combined_summary:
@@ -189,18 +188,16 @@ def merge_chunk_summaries(chunk_files):
                             if combined_summary[block_geoid]["properties"][key] is None:
                                 combined_summary[block_geoid]["properties"][key] = {}
                             for brand_name, provider_data in value.items():
-                                # Initialize or update brand data
                                 if brand_name not in combined_summary[block_geoid]["properties"][key]:
                                     combined_summary[block_geoid]["properties"][key][brand_name] = {
                                         "provider_id": provider_data["provider_id"],
                                         "Holding_Company": provider_data["Holding_Company"],
-                                        "Location_Count": 0,  # Initialize early
+                                        "Location_Count": 0,
                                         "R": [],
                                         "B": [],
                                         "X": []
                                     }
                                 existing_brand = combined_summary[block_geoid]["properties"][key][brand_name]
-                                # Merge records for each category
                                 for br_code in ["R", "B", "X"]:
                                     existing_records = existing_brand[br_code]
                                     new_records = provider_data.get(br_code, [])
@@ -235,12 +232,10 @@ def merge_chunk_summaries(chunk_files):
                                                 "Locations": ",".join(sorted(locations)),
                                                 "Location_Count": len(locations)
                                             })
-                                # Compute and set brand-level Location_Count
                                 all_locations = set()
                                 for br_code in ["R", "B", "X"]:
                                     for record in existing_brand[br_code]:
                                         all_locations.update(record["Locations"].split(","))
-                                # Update with explicit key order
                                 existing_brand.update({
                                     "provider_id": existing_brand["provider_id"],
                                     "Holding_Company": existing_brand["Holding_Company"],
@@ -249,12 +244,10 @@ def merge_chunk_summaries(chunk_files):
                                     "B": existing_brand["B"],
                                     "X": existing_brand["X"]
                                 })
-                                if block_geoid == "440070104002010":
-                                    logging.debug(f"merge_chunk_summaries: Set Location_Count for {block_geoid}.{key}.{brand_name}: {len(all_locations)} - Locations: {sorted(all_locations)}")
                         elif key not in all_tech_abbrs:
                             combined_summary[block_geoid]["properties"][key] = value
     
-    # Final pass to ensure Location_Count is set for all brands
+    # Final pass to ensure Location_Count consistency
     for block_geoid, data in combined_summary.items():
         for tech in all_tech_abbrs:
             tech_data = data["properties"].get(tech)
@@ -265,7 +258,6 @@ def merge_chunk_summaries(chunk_files):
                         for br_code in ["R", "B", "X"]:
                             for record in brand_data.get(br_code, []):
                                 all_locations.update(record["Locations"].split(","))
-                        # Reorder keys in final pass
                         ordered_brand_data = {
                             "provider_id": brand_data["provider_id"],
                             "Holding_Company": brand_data["Holding_Company"],
@@ -275,18 +267,6 @@ def merge_chunk_summaries(chunk_files):
                             "X": brand_data["X"]
                         }
                         data["properties"][tech][brand_name] = ordered_brand_data
-                        if block_geoid == "440070104002010":
-                            logging.debug(f"merge_chunk_summaries: Final pass set Location_Count for {block_geoid}.{tech}.{brand_name}: {len(all_locations)} - Locations: {sorted(all_locations)}")
-    
-    if "440070104002010" in combined_summary:
-        logging.debug(f"merge_chunk_summaries: Merged summary for 440070104002010: {json.dumps(combined_summary['440070104002010'], indent=2)}")
-    else:
-        logging.debug("merge_chunk_summaries: Block 440070104002010 not found in combined_summary")
-    
-    if combined_summary:
-        logging.debug(f"merge_chunk_summaries: Merged summary sample: {json.dumps(next(iter(combined_summary.values())), indent=2)}")
-    else:
-        logging.debug("merge_chunk_summaries: No data to merge (empty summary).")
     
     return {"type": "FeatureCollection", "features": [{"id": k, "properties": v["properties"]} for k, v in combined_summary.items()]}
 
