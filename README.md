@@ -78,9 +78,9 @@ Contributing
 Tony Thouweling: Lead developer—optimizing for large-scale broadband analysis.
 Submit issues/pull requests to enhance chunking, parallel processing, or memory efficiency.
 
-License
-Contact tony.houweling@gmail.com for permissions.
+## License
 
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 
 Example jq commands to inspect geojson:
