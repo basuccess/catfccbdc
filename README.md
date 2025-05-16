@@ -1,7 +1,7 @@
 # readme.md
 
 CatFCCBDC
-CatFCCBDC (Categorized FCC Broadband Data Collection) is a Python project designed to process and merge FCC Broadband Data Collection (BDC) datasets with Census Tabblock20 shapefiles, generating GeoJSON and GeoPackage outputs for broadband service analysis. Built for Tarana Wireless, it supports creating detailed broadband coverage maps to identify service gaps, aiding business case development for Fixed Wireless Broadband deployments under initiatives like BEAD.
+CatFCCBDC (Categorized FCC Broadband Data Collection) is a Python project designed to process and merge FCC Broadband Data Collection (BDC) datasets with Census Tabblock20 shapefiles, generating GeoJSON and GeoPackage outputs for broadband service analysis. Built for BEAD bid consultancy, it supports creating detailed broadband coverage maps to identify service gaps, aiding business case development for Fixed Wireless Broadband deployments under initiatives like BEAD and RDOF.
 
 Features
 Data Processing: Reads BDC CSV files and Census Tabblock20 shapefiles (tl_XX_tabblock20.shp).
@@ -79,7 +79,7 @@ Tony Thouweling: Lead developer—optimizing for large-scale broadband analysis.
 Submit issues/pull requests to enhance chunking, parallel processing, or memory efficiency.
 
 License
-Proprietary—Tarana Wireless internal use. Contact thouweling@taranawireless.com for permissions.
+Contact tony.houweling@gmail.com for permissions.
 
 
 
